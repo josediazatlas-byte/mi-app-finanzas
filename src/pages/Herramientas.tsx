@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, CartesianGrid } from 'recharts';
 import { useFinanzasStore } from '../stores/useFinanzasStore';
 import { useInversionesStore } from '../stores/useInversionesStore';
@@ -7,6 +7,7 @@ import { useInmuebleStore } from '../stores/useInmuebleStore';
 import { useDeudaStore } from '../stores/useDeudaStore';
 import { toEur } from '../utils/format';
 import { MOCK_TICKERS } from '../services/alphaVantage';
+import { getAllRates, FALLBACK_RATES } from '../services/exchangeRate';
 
 function fmt(n: number) {
   return n.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -83,25 +84,130 @@ function CalcHipoteca() {
   );
 }
 
+const DIVISAS_CONVERTER = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'SEK', 'NOK', 'DKK', 'MXN', 'BRL', 'CNY', 'INR', 'KRW'];
+const HOUR_MS = 3_600_000;
+
+// Build EUR-based rates (1 EUR = X currency) from FALLBACK_RATES (1 X = Y EUR)
+function buildFallbackEurRates(): Record<string, number> {
+  const rates: Record<string, number> = { EUR: 1 };
+  for (const [key, rate] of Object.entries(FALLBACK_RATES)) {
+    const currency = key.split('_')[0];
+    if (currency && rate > 0) rates[currency] = 1 / rate;
+  }
+  return rates;
+}
+
 function CalcDivisas() {
+  const { exchangeRates, setExchangeRates } = useMercadoStore();
   const [cantidad, setCantidad] = useState(1000);
   const [de, setDe] = useState('USD');
   const [a, setA] = useState('EUR');
-  const rates: Record<string, number> = { USD: 1, EUR: 0.92, GBP: 0.79, JPY: 149.5, CHF: 0.90, CAD: 1.36 };
-  const resultado = (cantidad / rates[de]) * rates[a];
-  const divisas = Object.keys(rates);
+  // EUR-based rates: { EUR: 1, USD: 1.087, GBP: 0.854, ... } — "1 EUR = X currency"
+  const [eurRates, setEurRates] = useState<Record<string, number>>(buildFallbackEurRates);
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [usingFallback, setUsingFallback] = useState(true);
+
+  useEffect(() => {
+    // Use store if rates are fresh (< 1h) and came from real API
+    if (exchangeRates.source === 'api' && exchangeRates.updatedAt > 0 && Date.now() - exchangeRates.updatedAt < HOUR_MS) {
+      const rates: Record<string, number> = { EUR: 1 };
+      for (const cur of DIVISAS_CONVERTER) {
+        const key = `${cur}_EUR` as keyof typeof exchangeRates;
+        const storeRate = exchangeRates[key] as number | undefined;
+        if (storeRate && storeRate > 0) rates[cur] = 1 / storeRate;
+      }
+      setEurRates(rates);
+      setUsingFallback(false);
+      setUpdatedAt(new Date(exchangeRates.updatedAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }));
+      return;
+    }
+
+    // Fetch fresh rates via proxy
+    getAllRates('EUR').then(data => {
+      const rates = data.conversion_rates;
+      setEurRates(rates);
+      setUsingFallback(false);
+      setUpdatedAt(new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }));
+      // Save to store for app-wide use
+      const toXeur = (code: string) => (rates[code] ? 1 / rates[code] : undefined);
+      setExchangeRates({
+        USD_EUR: toXeur('USD') ?? 0.92,
+        GBP_EUR: toXeur('GBP') ?? 1.17,
+        CHF_EUR: toXeur('CHF') ?? 1.05,
+        JPY_EUR: toXeur('JPY') ?? 0.0062,
+        CAD_EUR: toXeur('CAD') ?? 0.68,
+        AUD_EUR: toXeur('AUD') ?? 0.61,
+        SEK_EUR: toXeur('SEK') ?? 0.087,
+        NOK_EUR: toXeur('NOK') ?? 0.087,
+        DKK_EUR: toXeur('DKK') ?? 0.134,
+        MXN_EUR: toXeur('MXN') ?? 0.053,
+        BRL_EUR: toXeur('BRL') ?? 0.185,
+        CNY_EUR: toXeur('CNY') ?? 0.127,
+        INR_EUR: toXeur('INR') ?? 0.011,
+        KRW_EUR: toXeur('KRW') ?? 0.00068,
+        source: 'api',
+      });
+    }).catch(() => {
+      setUsingFallback(true);
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Convert using EUR as intermediary: amount_from * (to_rate / from_rate)
+  const convert = (amount: number, from: string, to: string) => {
+    if (from === to) return amount;
+    const fromRate = eurRates[from] ?? 1; // 1 EUR = fromRate FROM
+    const toRate = eurRates[to] ?? 1;     // 1 EUR = toRate TO
+    return amount * toRate / fromRate;
+  };
+
+  const resultado = convert(cantidad, de, a);
+  const rate = convert(1, de, a);
+  const rateInv = convert(1, a, de);
+
   return (
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr 1fr', gap: 12, marginBottom: 16 }}>
-        <div><label className="label">Cantidad</label><input className="input" type="number" value={cantidad} onChange={e => setCantidad(+e.target.value)} /></div>
-        <div><label className="label">De</label><select className="select" value={de} onChange={e => setDe(e.target.value)}>{divisas.map(d => <option key={d}>{d}</option>)}</select></div>
-        <div><label className="label">Resultado</label><input className="input" readOnly value={fmt(resultado)} style={{ fontWeight: 700 }} /></div>
-        <div><label className="label">A</label><select className="select" value={a} onChange={e => setA(e.target.value)}>{divisas.map(d => <option key={d}>{d}</option>)}</select></div>
+      {usingFallback && (
+        <div style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12, color: 'var(--amber)' }}>
+          Usando tipos estimados — configura ExchangeRate-API en Ajustes para tipos reales
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', marginBottom: 16, flexWrap: 'wrap' }}>
+        <div style={{ flex: '2 1 140px' }}>
+          <label className="label">Cantidad</label>
+          <input className="input" type="number" min="0" value={cantidad} onChange={e => setCantidad(+e.target.value)} />
+        </div>
+        <div style={{ flex: '1 1 90px' }}>
+          <label className="label">De</label>
+          <select className="select" value={de} onChange={e => setDe(e.target.value)}>
+            {DIVISAS_CONVERTER.map(d => <option key={d}>{d}</option>)}
+          </select>
+        </div>
+        <button className="btn-icon" onClick={() => { setDe(a); setA(de); }} title="Invertir divisas" style={{ padding: 10, fontSize: 16, marginBottom: 2 }}>⇄</button>
+        <div style={{ flex: '1 1 90px' }}>
+          <label className="label">A</label>
+          <select className="select" value={a} onChange={e => setA(e.target.value)}>
+            {DIVISAS_CONVERTER.map(d => <option key={d}>{d}</option>)}
+          </select>
+        </div>
       </div>
-      <div style={{ background: 'var(--bg3)', borderRadius: 10, padding: 16, textAlign: 'center' }}>
-        <span style={{ fontSize: 22, fontWeight: 700 }}>{cantidad.toLocaleString()} {de}</span>
-        <span style={{ color: 'var(--text2)', margin: '0 12px' }}>=</span>
-        <span style={{ fontSize: 22, fontWeight: 700, color: 'var(--blue)' }}>{fmt(resultado)} {a}</span>
+      <div style={{ background: 'var(--bg3)', borderRadius: 10, padding: 16 }}>
+        <div style={{ textAlign: 'center', marginBottom: 10 }}>
+          <span style={{ fontSize: 22, fontWeight: 700 }}>{cantidad.toLocaleString('es-ES', { maximumFractionDigits: 2 })} {de}</span>
+          <span style={{ color: 'var(--text2)', margin: '0 12px' }}>=</span>
+          <span style={{ fontSize: 22, fontWeight: 700, color: 'var(--blue)' }}>
+            {resultado.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {a}
+          </span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 20, fontSize: 12, color: 'var(--text2)' }}>
+          <span>1 {de} = {rate.toFixed(4)} {a}</span>
+          <span>·</span>
+          <span>1 {a} = {rateInv.toFixed(4)} {de}</span>
+        </div>
+        {updatedAt && !usingFallback && (
+          <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--text2)', marginTop: 8 }}>
+            Tipos actualizados hoy a las {updatedAt}
+          </div>
+        )}
       </div>
     </div>
   );

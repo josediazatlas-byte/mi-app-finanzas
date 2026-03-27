@@ -58,6 +58,14 @@ export default function Layout() {
         JPY_EUR: toEurRate('JPY') ?? 0.0062,
         CAD_EUR: toEurRate('CAD') ?? 0.68,
         AUD_EUR: toEurRate('AUD') ?? 0.61,
+        SEK_EUR: toEurRate('SEK') ?? 0.087,
+        NOK_EUR: toEurRate('NOK') ?? 0.087,
+        DKK_EUR: toEurRate('DKK') ?? 0.134,
+        MXN_EUR: toEurRate('MXN') ?? 0.053,
+        BRL_EUR: toEurRate('BRL') ?? 0.185,
+        CNY_EUR: toEurRate('CNY') ?? 0.127,
+        INR_EUR: toEurRate('INR') ?? 0.011,
+        KRW_EUR: toEurRate('KRW') ?? 0.00068,
         source: 'api',
       });
     }).catch(() => { /* keep fallback rates */ });
