@@ -1,7 +1,7 @@
-import { useState, useRef } from 'react';
-import { Plus, Trash2, Pencil, X, FileDown, Eye, Camera } from 'lucide-react';
-import { useFacturasStore } from '../stores/useFacturasStore';
-import type { Factura, ConceptoFactura, FacturaEstado } from '../stores/useFacturasStore';
+import { useState, useRef, useEffect } from 'react';
+import { Plus, Trash2, Pencil, X, FileDown, Eye, Camera, RefreshCw, Pause, Play, Ban, ChevronDown, ChevronUp } from 'lucide-react';
+import { useFacturasStore, calcProximaGeneracion } from '../stores/useFacturasStore';
+import type { Factura, ConceptoFactura, FacturaEstado, FrecuenciaRecurrencia } from '../stores/useFacturasStore';
 import { useClientesStore } from '../stores/useClientesStore';
 import type { Cliente } from '../stores/useClientesStore';
 import { useTicketsStore } from '../stores/useTicketsStore';
@@ -82,6 +82,12 @@ function ModalFactura({ factura, onClose }: { factura?: Factura | null; onClose:
   const [metodoPago, setMetodoPago] = useState(factura?.metodoPago ?? 'Transferencia');
   const [iban, setIban] = useState(factura?.iban ?? autonomo.iban ?? '');
   const [notas, setNotas] = useState(factura?.notas ?? '');
+  // Recurrencia
+  const [recurrente, setRecurrente] = useState(factura?.recurrente ?? false);
+  const [frecuencia, setFrecuencia] = useState<FrecuenciaRecurrencia>(factura?.frecuencia ?? 'mensual');
+  const [diaDelMes, setDiaDelMes] = useState(factura?.diaDelMes ?? 25);
+  const [fechaFinRecurrencia, setFechaFinRecurrencia] = useState<string | null>(factura?.fechaFinRecurrencia ?? null);
+  const proximaGen = recurrente ? calcProximaGeneracion(diaDelMes, frecuencia) : null;
 
   const updConcepto = (i: number, k: keyof ConceptoFactura, v: string | number) => {
     setConceptos(cs => cs.map((c, idx) => {
@@ -103,6 +109,13 @@ function ModalFactura({ factura, onClose }: { factura?: Factura | null; onClose:
       clienteId, fechaEmision, fechaVencimiento, conceptos,
       baseImponible: base, iva, retencion, total,
       estado: nuevoEstado ?? estado, metodoPago, iban, notas,
+      recurrente,
+      frecuencia: recurrente ? frecuencia : undefined,
+      diaDelMes: recurrente ? diaDelMes : undefined,
+      fechaFinRecurrencia: recurrente ? fechaFinRecurrencia : null,
+      proximaGeneracion: recurrente ? calcProximaGeneracion(diaDelMes, frecuencia) : null,
+      pausada: factura?.pausada ?? false,
+      plantillaId: factura?.plantillaId ?? null,
     };
     if (isEdit && factura) {
       updateFactura(factura.id, { ...data, numero: factura.numero });
@@ -279,9 +292,60 @@ function ModalFactura({ factura, onClose }: { factura?: Factura | null; onClose:
             </div>
           </div>
           <div><label className="label">Notas</label><input className="input" value={notas} onChange={e => setNotas(e.target.value)} /></div>
+
+          {/* ── Recurrencia ── */}
+          <div style={{ background: 'var(--bg3)', borderRadius: 10, padding: '12px 14px', border: recurrente ? '1px solid rgba(59,130,246,0.3)' : '1px solid transparent' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}>
+              <div style={{ position: 'relative', width: 38, height: 22, flexShrink: 0 }}>
+                <input type="checkbox" checked={recurrente} onChange={e => setRecurrente(e.target.checked)} style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }} />
+                <div style={{ position: 'absolute', inset: 0, background: recurrente ? 'var(--blue)' : 'var(--bg2)', borderRadius: 11, border: '1px solid var(--border)', transition: 'background .2s' }}>
+                  <div style={{ position: 'absolute', top: 2, left: recurrente ? 18 : 2, width: 16, height: 16, background: 'white', borderRadius: '50%', transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.4)' }} />
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>Factura recurrente</div>
+                <div style={{ fontSize: 11, color: 'var(--text2)' }}>Se generará automáticamente en la fecha configurada</div>
+              </div>
+            </label>
+
+            {recurrente && (
+              <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label className="label">Frecuencia</label>
+                    <select className="select" value={frecuencia} onChange={e => setFrecuencia(e.target.value as FrecuenciaRecurrencia)}>
+                      <option value="mensual">Mensual</option>
+                      <option value="trimestral">Trimestral</option>
+                      <option value="anual">Anual</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Día del mes (1-28)</label>
+                    <select className="select" value={diaDelMes} onChange={e => setDiaDelMes(+e.target.value)}>
+                      {Array.from({ length: 28 }, (_, i) => i + 1).map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Fin recurrencia (opcional)</label>
+                    <input className="input" type="date" value={fechaFinRecurrencia ?? ''} onChange={e => setFechaFinRecurrencia(e.target.value || null)} />
+                  </div>
+                </div>
+                <div style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: 'var(--blue)' }}>
+                  📅 Se generará automáticamente el día {diaDelMes} de cada {frecuencia === 'mensual' ? 'mes' : frecuencia === 'trimestral' ? 'trimestre' : 'año'}
+                  {proximaGen && <> · Próxima: <strong>{fmtDate(proximaGen)}</strong></>}
+                  {fechaFinRecurrencia && <> · Hasta: {fmtDate(fechaFinRecurrencia)}</>}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: 10, marginTop: 16, justifyContent: 'flex-end', flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 10, marginTop: 16, justifyContent: 'flex-end', flexShrink: 0, flexWrap: 'wrap' }}>
           <button className="btn-secondary" onClick={onClose}>Cancelar</button>
+          {isEdit && !recurrente && (
+            <button className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setRecurrente(true)}>
+              <RefreshCw size={13} /> Convertir en recurrente
+            </button>
+          )}
           {isEdit && estado !== 'Cobrada' && (
             <button className="btn-primary" style={{ background: 'var(--green)' }} onClick={() => handleSave('Cobrada')}>Marcar cobrada + registrar ingreso</button>
           )}
@@ -294,12 +358,36 @@ function ModalFactura({ factura, onClose }: { factura?: Factura | null; onClose:
 }
 
 function TabFacturas() {
-  const { facturas, removeFactura } = useFacturasStore();
+  const { facturas, removeFactura, pausarRecurrencia, reanudarRecurrencia, cancelarRecurrencia, generarRecurrentes } = useFacturasStore();
   const { clientes } = useClientesStore();
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState<Factura | null>(null);
   const [filtroEstado, setFiltroEstado] = useState<FacturaEstado | 'Todas'>('Todas');
   const [filtroCliente, setFiltroCliente] = useState('');
+  const [showRecurrencias, setShowRecurrencias] = useState(false);
+
+  // Auto-generate recurring invoices on mount + 3-day advance notifications
+  useEffect(() => {
+    const today = new Date();
+
+    // 3-day advance notifications
+    const in3Days = new Date(today); in3Days.setDate(in3Days.getDate() + 3);
+    const in3DaysStr = in3Days.toISOString().slice(0, 10);
+    facturas.forEach(f => {
+      if (f.recurrente && !f.pausada && f.proximaGeneracion === in3DaysStr) {
+        const cliente = clientes.find(c => c.id === f.clienteId);
+        toast(`En 3 días se generará tu factura recurrente para ${cliente?.nombreRazonSocial ?? ''} por ${fmtEur(f.total)}`, { icon: '📅', duration: 8000 });
+      }
+    });
+
+    // Generate due recurring invoices
+    const getClienteName = (id: string) => clientes.find(c => c.id === id)?.nombreRazonSocial ?? '';
+    const generated = generarRecurrentes(getClienteName);
+    generated.forEach(({ numero, clienteNombre }) => {
+      toast.success(`Factura recurrente generada: ${numero} para ${clienteNombre}. Revísala antes de enviarla.`, { duration: 7000 });
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filtradas = facturas.filter(f =>
     (filtroEstado === 'Todas' || f.estado === filtroEstado) &&
@@ -348,26 +436,106 @@ function TabFacturas() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {filtradas.map(f => {
             const cliente = clientes.find(c => c.id === f.clienteId);
+            const isPlantilla = f.recurrente && !f.pausada;
+            const isPausada = f.recurrente && f.pausada;
             return (
-              <div key={f.id} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 100px 90px 90px 90px auto', gap: 10, alignItems: 'center', padding: '10px 14px', background: 'var(--bg2)', borderRadius: 10, border: '1px solid var(--border)' }}>
-                <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--blue)' }}>{f.numero}</span>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 500 }}>{cliente?.nombreRazonSocial ?? '—'}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text2)' }}>{fmtDate(f.fechaEmision)}</div>
-                </div>
-                <span style={{ fontSize: 12 }}>{fmtEur(f.baseImponible)}</span>
-                <span style={{ fontSize: 13, fontWeight: 700 }}>{fmtEur(f.total)}</span>
-                <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 12, background: `${ESTADO_COLORS[f.estado]}22`, color: ESTADO_COLORS[f.estado], fontWeight: 600, textAlign: 'center' }}>{f.estado}</span>
-                <span style={{ fontSize: 11, color: 'var(--text2)' }}>{f.metodoPago}</span>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  <button className="btn-icon" onClick={() => { setEditItem(f); setShowModal(true); }}><Pencil size={13} /></button>
-                  <button className="btn-icon" onClick={() => { if (window.confirm('¿Eliminar?')) removeFactura(f.id); }}><Trash2 size={13} /></button>
+              <div key={f.id} style={{ background: 'var(--bg2)', borderRadius: 10, border: `1px solid ${isPlantilla ? 'rgba(59,130,246,0.3)' : isPausada ? 'rgba(245,158,11,0.3)' : 'var(--border)'}`, overflow: 'hidden' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 100px 90px 90px auto', gap: 10, alignItems: 'center', padding: '10px 14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--blue)' }}>{f.numero}</span>
+                    {f.recurrente && <span title={isPausada ? 'Recurrente pausada' : 'Recurrente activa'} style={{ display: 'flex' }}><RefreshCw size={11} style={{ color: isPausada ? 'var(--amber)' : 'var(--blue)', flexShrink: 0 }} /></span>}
+                    {f.plantillaId && <span style={{ fontSize: 9, background: 'rgba(59,130,246,0.15)', color: 'var(--blue)', padding: '1px 4px', borderRadius: 3, fontWeight: 700 }}>AUTO</span>}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 500 }}>{cliente?.nombreRazonSocial ?? '—'}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text2)' }}>
+                      {fmtDate(f.fechaEmision)}
+                      {f.recurrente && f.proximaGeneracion && <> · <span style={{ color: 'var(--blue)' }}>Próxima: {fmtDate(f.proximaGeneracion)}</span></>}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 12 }}>{fmtEur(f.baseImponible)}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700 }}>{fmtEur(f.total)}</span>
+                  <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 12, background: `${ESTADO_COLORS[f.estado]}22`, color: ESTADO_COLORS[f.estado], fontWeight: 600, textAlign: 'center' }}>{f.estado}</span>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button className="btn-icon" title="Editar" onClick={() => { setEditItem(f); setShowModal(true); }}><Pencil size={13} /></button>
+                    {f.recurrente && !f.pausada && <button className="btn-icon" title="Pausar recurrencia" onClick={() => pausarRecurrencia(f.id)}><Pause size={12} /></button>}
+                    {f.recurrente && f.pausada && <button className="btn-icon" title="Reanudar recurrencia" onClick={() => reanudarRecurrencia(f.id)}><Play size={12} /></button>}
+                    {f.recurrente && <button className="btn-icon" title="Cancelar recurrencia" onClick={() => { if (window.confirm('¿Cancelar la recurrencia? La factura no se eliminará.')) cancelarRecurrencia(f.id); }}><Ban size={12} /></button>}
+                    <button className="btn-icon" title="Eliminar" onClick={() => { if (window.confirm('¿Eliminar?')) removeFactura(f.id); }}><Trash2 size={13} /></button>
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
       )}
+      {/* ── Recurrencias activas ── */}
+      {facturas.some(f => f.recurrente) && (
+        <div style={{ background: 'var(--bg2)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 10, overflow: 'hidden' }}>
+          <button
+            style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+            onClick={() => setShowRecurrencias(v => !v)}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <RefreshCw size={14} style={{ color: 'var(--blue)' }} />
+              <span>Recurrencias activas</span>
+              <span style={{ fontSize: 11, background: 'rgba(59,130,246,0.15)', color: 'var(--blue)', padding: '1px 7px', borderRadius: 10, fontWeight: 700 }}>
+                {facturas.filter(f => f.recurrente).length}
+              </span>
+            </div>
+            {showRecurrencias ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+          </button>
+
+          {showRecurrencias && (
+            <div style={{ borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 0 }}>
+              {facturas.filter(f => f.recurrente).map(f => {
+                const cliente = clientes.find(c => c.id === f.clienteId);
+                const generadas = facturas.filter(x => x.plantillaId === f.id);
+                return (
+                  <div key={f.id} style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 13 }}>{cliente?.nombreRazonSocial ?? '—'}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>
+                          {fmtEur(f.total)} · {f.frecuencia === 'mensual' ? 'Mensual' : f.frecuencia === 'trimestral' ? 'Trimestral' : 'Anual'} · Día {f.diaDelMes}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                        <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 10, fontWeight: 700, background: f.pausada ? 'rgba(245,158,11,0.15)' : 'rgba(34,197,94,0.15)', color: f.pausada ? 'var(--amber)' : 'var(--green)' }}>
+                          {f.pausada ? 'Pausada' : 'Activa'}
+                        </span>
+                        <button className="btn-icon" title="Editar plantilla" onClick={() => { setEditItem(f); setShowModal(true); }}><Pencil size={12} /></button>
+                        {!f.pausada ? (
+                          <button className="btn-icon" title="Pausar" onClick={() => pausarRecurrencia(f.id)}><Pause size={12} /></button>
+                        ) : (
+                          <button className="btn-icon" title="Reanudar" onClick={() => reanudarRecurrencia(f.id)}><Play size={12} /></button>
+                        )}
+                        <button className="btn-icon" title="Cancelar recurrencia" onClick={() => { if (window.confirm('¿Cancelar la recurrencia?')) cancelarRecurrencia(f.id); }}><Ban size={12} /></button>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 16, fontSize: 11, color: 'var(--text2)', marginTop: 4 }}>
+                      {f.proximaGeneracion && <span>📅 Próxima: <strong style={{ color: 'var(--blue)' }}>{fmtDate(f.proximaGeneracion)}</strong></span>}
+                      {f.fechaFinRecurrencia && <span>🏁 Fin: {fmtDate(f.fechaFinRecurrencia)}</span>}
+                      <span>📄 Generadas: <strong>{generadas.length}</strong></span>
+                    </div>
+                    {generadas.length > 0 && (
+                      <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {generadas.slice(-3).map(g => (
+                          <button key={g.id} style={{ fontSize: 10, background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', color: 'var(--text2)' }}
+                            onClick={() => { setEditItem(g); setShowModal(true); }}>
+                            {g.numero} ({fmtDate(g.fechaEmision)})
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {showModal && <ModalFactura factura={editItem} onClose={() => { setShowModal(false); setEditItem(null); }} />}
     </div>
   );
