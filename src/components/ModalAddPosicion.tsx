@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Search, Loader } from 'lucide-react';
 import { useInversionesStore } from '../stores/useInversionesStore';
 import type { Posicion } from '../stores/useInversionesStore';
-import { searchSymbol } from '../services/alphaVantage';
-import { cgSearchCoin, CRYPTO_SYMBOL_TO_ID } from '../services/coinGecko';
+import { searchSymbol, getQuote } from '../services/alphaVantage';
+import { cgSearchCoin, cgGetPrices, CRYPTO_SYMBOL_TO_ID, symbolToId } from '../services/coinGecko';
+import { fmtEur, toEur } from '../utils/format';
 import toast from 'react-hot-toast';
 
 interface Props { onClose: () => void; }
@@ -14,29 +15,33 @@ export default function ModalAddPosicion({ onClose }: Props) {
   const [results, setResults] = useState<Array<{ symbol: string; name: string; type: string; thumb?: string; coinId?: string }>>([]);
   const [searching, setSearching] = useState(false);
   const [form, setForm] = useState<Omit<Posicion, 'id'>>({
-    simbolo: '',
-    nombre: '',
-    tipo: 'Empresa',
-    acciones: 1,
-    precioMedio: 0,
-    divisa: 'USD',
-    notas: '',
+    simbolo: '', nombre: '', tipo: 'Empresa', acciones: 1, precioMedio: 0, divisa: 'USD', notas: '',
   });
+  const [marketPrice, setMarketPrice] = useState<number | null>(null);
+  const [marketPriceEur, setMarketPriceEur] = useState<number | null>(null);
+  const [priceLoading, setPriceLoading] = useState(false);
+  const [priceTimestamp, setPriceTimestamp] = useState<Date | null>(null);
+  const [, forceTickUpdate] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => forceTickUpdate(n => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const minutesAgoStr = (date: Date) => {
+    const mins = Math.floor((Date.now() - date.getTime()) / 60_000);
+    if (mins < 1) return 'ahora mismo';
+    if (mins === 1) return 'hace 1 min';
+    return `hace ${mins} min`;
+  };
 
   const handleSearch = async () => {
     if (!searchTerm.trim()) return;
     setSearching(true);
     try {
       if (form.tipo === 'Crypto') {
-        // CoinGecko search for crypto
         const coins = await cgSearchCoin(searchTerm);
-        setResults(coins.map(c => ({
-          symbol: c.symbol.toUpperCase(),
-          name: c.name,
-          type: 'Crypto',
-          thumb: c.thumb,
-          coinId: c.id,
-        })));
+        setResults(coins.map(c => ({ symbol: c.symbol.toUpperCase(), name: c.name, type: 'Crypto', thumb: c.thumb, coinId: c.id })));
       } else {
         const res = await searchSymbol(searchTerm);
         setResults(res);
@@ -47,17 +52,47 @@ export default function ModalAddPosicion({ onClose }: Props) {
     setSearching(false);
   };
 
-  const selectResult = (r: { symbol: string; name: string; type: string; coinId?: string }) => {
+  const fetchMarketPrice = async (symbol: string, tipo: Posicion['tipo'], coinId?: string) => {
+    setPriceLoading(true);
+    try {
+      if (tipo === 'Crypto') {
+        const id = coinId ?? symbolToId(symbol);
+        const prices = await cgGetPrices([id]);
+        const data = prices[id];
+        if (data) {
+          const priceUsd = data.usd ?? data.eur / 0.92;
+          setMarketPrice(priceUsd);
+          setMarketPriceEur(data.eur);
+          setForm(f => ({ ...f, precioMedio: priceUsd }));
+          setPriceTimestamp(new Date());
+        }
+      } else {
+        const q = await getQuote(symbol);
+        if (q && q.price > 0) {
+          setMarketPrice(q.price);
+          setMarketPriceEur(toEur(q.price, 'USD'));
+          setForm(f => ({ ...f, precioMedio: q.price }));
+          setPriceTimestamp(new Date());
+        }
+      }
+    } catch { /* keep form empty */ }
+    setPriceLoading(false);
+  };
+
+  const selectResult = async (r: { symbol: string; name: string; type: string; coinId?: string }) => {
     const tipo: Posicion['tipo'] =
       r.type === 'ETF' ? 'ETF' :
       r.type === 'Crypto' ? 'Crypto' :
       r.symbol.match(/^(GLD|SLV|USO|PDBC)$/) ? 'Materia Prima' : 'Empresa';
-    // For crypto, store the coinGecko id in notas if not in our known map
     const isMapped = r.symbol.toUpperCase() in CRYPTO_SYMBOL_TO_ID;
     const extraNotas = (tipo === 'Crypto' && r.coinId && !isMapped) ? `coinId:${r.coinId}` : '';
-    setForm({ ...form, simbolo: r.symbol.toUpperCase(), nombre: r.name, tipo, notas: extraNotas });
+    setForm(f => ({ ...f, simbolo: r.symbol.toUpperCase(), nombre: r.name, tipo, notas: extraNotas }));
     setResults([]);
     setSearchTerm('');
+    setMarketPrice(null);
+    setMarketPriceEur(null);
+    setPriceTimestamp(null);
+    await fetchMarketPrice(r.symbol.toUpperCase(), tipo, r.coinId);
   };
 
   const handleSubmit = () => {
@@ -66,6 +101,20 @@ export default function ModalAddPosicion({ onClose }: Props) {
     toast.success('Posición añadida');
     onClose();
   };
+
+  // PnL summary calculations
+  const totalInvertidoEur = form.acciones > 0 && form.precioMedio > 0
+    ? toEur(form.acciones * form.precioMedio, form.divisa) : null;
+  const valorActualEur = form.acciones > 0 && marketPrice !== null
+    ? toEur(form.acciones * marketPrice, form.divisa) : null;
+  const pnlEur = totalInvertidoEur !== null && valorActualEur !== null
+    ? valorActualEur - totalInvertidoEur : null;
+  const pnlPct = pnlEur !== null && totalInvertidoEur !== null && totalInvertidoEur > 0
+    ? (pnlEur / totalInvertidoEur) * 100 : null;
+
+  const marketPriceDisplay = marketPrice !== null
+    ? `$${marketPrice.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : null;
 
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -78,7 +127,13 @@ export default function ModalAddPosicion({ onClose }: Props) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
             <label className="label">Tipo</label>
-            <select className="select" value={form.tipo} onChange={(e) => { setForm({ ...form, tipo: e.target.value as Posicion['tipo'], simbolo: '', nombre: '' }); setResults([]); }}>
+            <select className="select" value={form.tipo} onChange={(e) => {
+              setForm({ ...form, tipo: e.target.value as Posicion['tipo'], simbolo: '', nombre: '' });
+              setResults([]);
+              setMarketPrice(null);
+              setMarketPriceEur(null);
+              setPriceTimestamp(null);
+            }}>
               {['Empresa', 'ETF', 'Materia Prima', 'Crypto'].map(t => <option key={t}>{t}</option>)}
             </select>
           </div>
@@ -129,8 +184,41 @@ export default function ModalAddPosicion({ onClose }: Props) {
               <input className="input" type="number" min="0" step="0.00001" value={form.acciones || ''} onChange={(e) => setForm({ ...form, acciones: parseFloat(e.target.value) || 0 })} />
             </div>
             <div>
-              <label className="label">Precio medio</label>
-              <input className="input" type="number" min="0" step="0.01" value={form.precioMedio || ''} onChange={(e) => setForm({ ...form, precioMedio: parseFloat(e.target.value) || 0 })} placeholder={form.divisa} />
+              <label className="label">Precio de compra por unidad</label>
+              <div style={{ position: 'relative' }}>
+                {priceLoading && (
+                  <Loader size={13} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', animation: 'spin 1s linear infinite', color: 'var(--text2)' }} />
+                )}
+                <input
+                  className="input"
+                  type="number" min="0" step="0.01"
+                  value={form.precioMedio || ''}
+                  onChange={(e) => setForm({ ...form, precioMedio: parseFloat(e.target.value) || 0 })}
+                  placeholder={form.divisa}
+                  style={{ paddingRight: priceLoading ? 30 : undefined }}
+                />
+              </div>
+              {/* Market price info */}
+              {marketPriceDisplay && priceTimestamp && (
+                <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                  <span>
+                    Precio de mercado: <strong style={{ color: 'var(--text)' }}>{marketPriceDisplay}</strong>
+                    {form.tipo === 'Crypto' && marketPriceEur !== null && (
+                      <span style={{ color: 'var(--text2)' }}> / {fmtEur(marketPriceEur)}</span>
+                    )}
+                    {' '}· {minutesAgoStr(priceTimestamp)}
+                  </span>
+                  <button
+                    style={{ fontSize: 11, color: 'var(--blue)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, whiteSpace: 'nowrap' }}
+                    onClick={() => setForm(f => ({ ...f, precioMedio: marketPrice! }))}>
+                    Usar precio actual
+                  </button>
+                </div>
+              )}
+              {/* Helper text */}
+              <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text2)', lineHeight: 1.4 }}>
+                Introduce el precio al que compraste. Si compraste en varias ocasiones, introduce el precio medio de compra.
+              </div>
             </div>
           </div>
 
@@ -147,6 +235,33 @@ export default function ModalAddPosicion({ onClose }: Props) {
             <label className="label">Notas (opcional)</label>
             <input className="input" value={form.notas} onChange={(e) => setForm({ ...form, notas: e.target.value })} placeholder="Notas sobre esta posición..." />
           </div>
+
+          {/* PnL summary */}
+          {totalInvertidoEur !== null && (
+            <div style={{ background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 3 }}>Total invertido</div>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>{fmtEur(totalInvertidoEur)}</div>
+              </div>
+              {valorActualEur !== null && (
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 3 }}>Valor actual</div>
+                  <div style={{ fontSize: 14, fontWeight: 700 }}>{fmtEur(valorActualEur)}</div>
+                </div>
+              )}
+              {pnlEur !== null && pnlPct !== null && (
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 3 }}>P&L</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: pnlEur >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                    {pnlEur >= 0 ? '+' : ''}{fmtEur(pnlEur)}
+                    <span style={{ fontSize: 11, fontWeight: 400, marginLeft: 4 }}>
+                      ({pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%)
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={onClose}>Cancelar</button>
