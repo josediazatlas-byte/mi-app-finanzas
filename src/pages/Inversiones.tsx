@@ -12,7 +12,9 @@ import { cgGetPrices, symbolToId, isCryptoSymbol } from '../services/coinGecko';
 import { callClaudeAPI, buildFinancialContext, SYSTEM_PROMPT } from '../utils/aiContext';
 import { fmtEur, toEur, USD_TO_EUR } from '../utils/format';
 import ModalAddPosicion from '../components/ModalAddPosicion';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, RadarChart, Radar, PolarGrid, PolarAngleAxis } from 'recharts';
+import { getRatings, getPriceTarget, getStockNews, getFearAndGreed } from '../services/financialModelingPrep';
+import type { NewsItem } from '../services/financialModelingPrep';
 
 const TIPOS = ['Empresa', 'ETF', 'Materia Prima', 'Crypto', 'Fondo Indexado'] as const;
 const COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#a78bfa', '#ef4444', '#06b6d4', '#ec4899', '#84cc16'];
@@ -197,6 +199,490 @@ function ModalActualizarVL({ posicion, onClose }: { posicion: Posicion; onClose:
   );
 }
 
+// ─── Score helpers ────────────────────────────────────────────────────────────
+
+interface ScoreBreakdown {
+  total: number;
+  diversificacionSector: number;  // 30 pts
+  diversificacionTipo: number;    // 25 pts
+  concentracionMaxima: number;    // 20 pts
+  calidadFundamental: number;     // 15 pts
+  liquidez: number;               // 10 pts
+}
+
+function calcScoreCartera(posiciones: Posicion[], getPriceOf: (p: Posicion) => number, valorTotal: number): ScoreBreakdown {
+  if (posiciones.length === 0) return { total: 0, diversificacionSector: 0, diversificacionTipo: 0, concentracionMaxima: 0, calidadFundamental: 0, liquidez: 0 };
+  const n = posiciones.length;
+  const diversificacionSector = n === 1 ? 5 : n === 2 ? 10 : n <= 4 ? 18 : n <= 7 ? 25 : 30;
+  const tipos = new Set(posiciones.map(p => p.tipo)).size;
+  const diversificacionTipo = tipos === 1 ? 5 : tipos === 2 ? 12 : tipos === 3 ? 18 : tipos === 4 ? 22 : 25;
+  const maxPeso = Math.max(...posiciones.map(p => valorTotal > 0 ? (toEur(getPriceOf(p) * p.acciones, p.divisa) / valorTotal) * 100 : 0), 0);
+  const concentracionMaxima = maxPeso > 60 ? 2 : maxPeso > 40 ? 8 : maxPeso > 25 ? 14 : maxPeso > 15 ? 18 : 20;
+  const avgPnl = posiciones.reduce((s, p) => s + (p.precioMedio > 0 ? ((getPriceOf(p) - p.precioMedio) / p.precioMedio) * 100 : 0), 0) / posiciones.length;
+  const calidadFundamental = avgPnl < -15 ? 3 : avgPnl < -5 ? 7 : avgPnl < 5 ? 11 : 15;
+  const hasETFOrFondo = posiciones.some(p => p.tipo === 'ETF' || p.tipo === 'Fondo Indexado');
+  const hasEmpresa = posiciones.some(p => p.tipo === 'Empresa');
+  const cryptoPct = valorTotal > 0 ? posiciones.filter(p => p.tipo === 'Crypto').reduce((s, p) => s + toEur(getPriceOf(p) * p.acciones, p.divisa), 0) / valorTotal * 100 : 0;
+  const liquidez = Math.min(10, (hasETFOrFondo ? 4 : 0) + (hasEmpresa ? 3 : 0) + (cryptoPct < 30 ? 3 : 0));
+  return { total: Math.round(diversificacionSector + diversificacionTipo + concentracionMaxima + calidadFundamental + liquidez), diversificacionSector, diversificacionTipo, concentracionMaxima, calidadFundamental, liquidez };
+}
+
+function getRecomendacion(pnlPct: number, peso: number): 'COMPRAR' | 'MANTENER' | 'VENDER' {
+  if (pnlPct > 25 || peso > 33) return 'VENDER';
+  if (pnlPct < -5 && peso < 20) return 'COMPRAR';
+  return 'MANTENER';
+}
+
+// ——— Modal Score General ———
+const AI_CACHE_KEY = 'score_ai_analysis';
+const AI_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
+
+function getFngColor(val: number): string {
+  if (val <= 25) return '#ef4444';
+  if (val <= 45) return '#f97316';
+  if (val <= 55) return '#f59e0b';
+  if (val <= 75) return '#84cc16';
+  return '#22c55e';
+}
+
+function getFngLabel(val: number): string {
+  if (val <= 25) return 'Miedo extremo';
+  if (val <= 45) return 'Miedo';
+  if (val <= 55) return 'Neutral';
+  if (val <= 75) return 'Codicia';
+  return 'Codicia extrema';
+}
+
+function ModalScoreGeneral({ scoreData, posiciones, getPrice, valorTotal, onClose, onIAClick }: {
+  scoreData: ScoreBreakdown;
+  posiciones: Posicion[];
+  getPrice: (p: Posicion) => number;
+  valorTotal: number;
+  onClose: () => void;
+  onIAClick: () => void;
+}) {
+  const { anthropicKey, fmpKey } = useConfigStore();
+  const score = scoreData.total;
+
+  // Fear & Greed
+  const [fng, setFng] = useState<{ value: number; classification: string } | null>(null);
+
+  // Analyst data per symbol
+  interface AnalystData { rating: string; rec: string; targetConsensus: number; targetHigh: number; targetLow: number; }
+  const [analysts, setAnalysts] = useState<Record<string, AnalystData>>({});
+
+  // News per symbol
+  const [news, setNews] = useState<NewsItem[]>([]);
+  const [loadingMarket, setLoadingMarket] = useState(false);
+
+  // AI
+  const [aiText, setAiText] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiCacheTs, setAiCacheTs] = useState(0);
+
+  useEffect(() => {
+    // Load cached AI
+    try {
+      const cached = sessionStorage.getItem(AI_CACHE_KEY);
+      if (cached) {
+        const { text, ts } = JSON.parse(cached);
+        if (Date.now() - ts < AI_CACHE_TTL) { setAiText(text); setAiCacheTs(ts); }
+      }
+    } catch { /* ignore */ }
+
+    // Fetch market data
+    const fetchMarket = async () => {
+      setLoadingMarket(true);
+      try {
+        // Fear & Greed
+        const fngData = await getFearAndGreed();
+        if (fngData) setFng({ value: parseInt(fngData.value), classification: fngData.value_classification });
+
+        // Analyst data for non-crypto, non-fund positions
+        if (fmpKey) {
+          const tradeable = posiciones.filter(p => p.tipo !== 'Fondo Indexado' && p.tipo !== 'Crypto');
+          const analystMap: Record<string, AnalystData> = {};
+          await Promise.all(tradeable.map(async (p) => {
+            const [rat, pt] = await Promise.all([getRatings(p.simbolo), getPriceTarget(p.simbolo)]);
+            if (rat || pt) {
+              analystMap[p.simbolo] = {
+                rating: rat?.rating ?? '-',
+                rec: rat?.ratingRecommendation ?? '-',
+                targetConsensus: pt?.targetConsensus ?? 0,
+                targetHigh: pt?.targetHigh ?? 0,
+                targetLow: pt?.targetLow ?? 0,
+              };
+            }
+          }));
+          setAnalysts(analystMap);
+
+          // News (all tickers in one call)
+          if (tradeable.length > 0) {
+            const symbols = tradeable.map(p => p.simbolo);
+            const newsItems = await getStockNews(symbols);
+            setNews(newsItems);
+          }
+        }
+      } catch { /* ignore */ } finally { setLoadingMarket(false); }
+    };
+    fetchMarket();
+  }, []);
+
+  const rangeInfo = score <= 30 ? { label: 'Cartera de alto riesgo', sub: 'Concentración elevada', color: 'var(--red)' }
+    : score <= 50 ? { label: 'Cartera mejorable', sub: 'Diversificación limitada', color: 'var(--amber)' }
+    : score <= 70 ? { label: 'Cartera sólida', sub: 'Buena base con margen de mejora', color: 'var(--blue)' }
+    : score <= 85 ? { label: 'Cartera muy buena', sub: 'Bien diversificada', color: 'var(--green)' }
+    : { label: 'Cartera excelente', sub: 'Diversificación óptima', color: 'var(--green)' };
+
+  const factors = [
+    { label: 'Diversificación sector', obtenido: scoreData.diversificacionSector, maximo: 30, mejora: 'Añade posiciones en más sectores' },
+    { label: 'Tipos de activo', obtenido: scoreData.diversificacionTipo, maximo: 25, mejora: 'Combina Empresas, ETFs y Fondos' },
+    { label: 'Concentración máxima', obtenido: scoreData.concentracionMaxima, maximo: 20, mejora: 'Ninguna posición > 15% cartera' },
+    { label: 'Calidad fundamental', obtenido: scoreData.calidadFundamental, maximo: 15, mejora: 'Revisa posiciones con pérdidas' },
+    { label: 'Liquidez', obtenido: scoreData.liquidez, maximo: 10, mejora: 'Incluye ETFs o Fondos Indexados' },
+  ];
+
+  // Radar data (normalized 0-100)
+  const radarData = factors.map(f => ({
+    factor: f.label.split(' ')[0],
+    value: Math.round((f.obtenido / f.maximo) * 100),
+    fullMark: 100,
+  }));
+
+  const buildAIPrompt = () => {
+    const posResumen = posiciones.map(p => {
+      const precio = getPrice(p);
+      const valor = toEur(precio * p.acciones, p.divisa);
+      const peso = valorTotal > 0 ? (valor / valorTotal * 100).toFixed(1) : '0';
+      const pnl = p.precioMedio > 0 ? ((precio - p.precioMedio) / p.precioMedio * 100).toFixed(1) : '0';
+      const analyst = analysts[p.simbolo];
+      const analystInfo = analyst ? ` | Analistas: ${analyst.rec} | Objetivo: $${analyst.targetConsensus}` : '';
+      return `- ${p.simbolo} (${p.tipo}): ${peso}% cartera, PnL ${pnl}%${analystInfo}`;
+    }).join('\n');
+
+    const newsResumen = news.slice(0, 6).map(n => `- [${n.symbol}] ${n.title} (${n.publishedDate?.slice(0, 10)})`).join('\n');
+
+    const fngInfo = fng ? `Fear & Greed Index: ${fng.value}/100 (${fng.classification})` : 'Fear & Greed: no disponible';
+
+    return `Eres un analista financiero experto. Analiza esta cartera y proporciona recomendaciones específicas y accionables:
+
+CARTERA ACTUAL (${posiciones.length} posiciones):
+${posResumen}
+
+SCORE ACTUAL: ${score}/100 (${rangeInfo.label})
+Desglose: Diversificación sector ${scoreData.diversificacionSector}/30, Tipos ${scoreData.diversificacionTipo}/25, Concentración ${scoreData.concentracionMaxima}/20, Calidad ${scoreData.calidadFundamental}/15, Liquidez ${scoreData.liquidez}/10
+
+DATOS DE MERCADO HOY:
+${fngInfo}
+
+NOTICIAS RECIENTES:
+${newsResumen || 'Sin noticias disponibles'}
+
+Por favor proporciona (en español, de forma directa y sin rodeos):
+1. Los 3 factores que más penalizan el score actual con datos concretos
+2. Top 3 acciones concretas para mejorar el score esta semana
+3. Si hay alertas basadas en noticias recientes, menciónalas
+4. Una posición que consideras sobreponderada y por qué
+5. Un tipo de activo o sector no representado que complementaría la cartera`;
+  };
+
+  const askAI = async (force = false) => {
+    if (!anthropicKey) return;
+    if (!force && aiText) return;
+    setAiLoading(true);
+    try {
+      const prompt = buildAIPrompt();
+      const res = await callClaudeAPI([{ role: 'user', content: prompt }], SYSTEM_PROMPT, anthropicKey);
+      setAiText(res);
+      const ts = Date.now();
+      setAiCacheTs(ts);
+      try { sessionStorage.setItem(AI_CACHE_KEY, JSON.stringify({ text: res, ts })); } catch { /* ignore */ }
+    } catch { /* ignore */ } finally { setAiLoading(false); }
+  };
+
+  const fngVal = fng?.value ?? 0;
+  const fngColor = fng ? getFngColor(fngVal) : 'var(--text2)';
+  const fngLbl = fng ? getFngLabel(fngVal) : '';
+
+  const analystSymbols = Object.keys(analysts);
+  const cacheAge = aiCacheTs > 0 ? Math.floor((Date.now() - aiCacheTs) / 60_000) : 0;
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal" style={{ maxWidth: 560, maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14, flexShrink: 0 }}>
+          <div>
+            <h2 style={{ fontSize: 17, fontWeight: 700 }}>Score de cartera: {score}/100</h2>
+            <div style={{ fontSize: 13, color: rangeInfo.color, fontWeight: 600, marginTop: 2 }}>{rangeInfo.label}</div>
+          </div>
+          <button className="btn-icon" onClick={onClose}><X size={16} /></button>
+        </div>
+
+        <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+          {/* Score + Radar */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            {/* Left: score bar */}
+            <div style={{ background: 'var(--bg3)', borderRadius: 12, padding: '14px 16px' }}>
+              <div style={{ fontSize: 44, fontWeight: 800, color: rangeInfo.color, lineHeight: 1 }}>{score}</div>
+              <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 10 }}>de 100 puntos</div>
+              <div style={{ background: 'var(--bg2)', borderRadius: 6, height: 6, overflow: 'hidden', marginBottom: 10 }}>
+                <div style={{ height: '100%', width: `${score}%`, background: rangeInfo.color, borderRadius: 6 }} />
+              </div>
+              {factors.map(f => {
+                const pct = f.obtenido / f.maximo;
+                const col = pct >= 0.8 ? 'var(--green)' : pct >= 0.5 ? 'var(--amber)' : 'var(--red)';
+                return (
+                  <div key={f.label} style={{ marginBottom: 6 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 2 }}>
+                      <span style={{ color: 'var(--text2)' }}>{f.label}</span>
+                      <span style={{ color: col, fontWeight: 600 }}>{f.obtenido}/{f.maximo}</span>
+                    </div>
+                    <div style={{ background: 'var(--bg2)', borderRadius: 3, height: 3 }}>
+                      <div style={{ height: '100%', width: `${pct * 100}%`, background: col, borderRadius: 3 }} />
+                    </div>
+                    {f.obtenido < f.maximo && <div style={{ fontSize: 10, color: 'var(--text2)', marginTop: 1 }}>💡 {f.mejora}</div>}
+                  </div>
+                );
+              })}
+            </div>
+            {/* Right: Radar */}
+            <div style={{ background: 'var(--bg3)', borderRadius: 12, padding: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 6, textAlign: 'center' }}>Perfil de la cartera</div>
+              <ResponsiveContainer width="100%" height={160}>
+                <RadarChart data={radarData} margin={{ top: 5, right: 10, bottom: 5, left: 10 }}>
+                  <PolarGrid stroke="var(--border)" />
+                  <PolarAngleAxis dataKey="factor" tick={{ fill: 'var(--text2)', fontSize: 10 }} />
+                  <Radar name="Score" dataKey="value" stroke={rangeInfo.color} fill={rangeInfo.color} fillOpacity={0.25} />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Fear & Greed */}
+          <div style={{ background: 'var(--bg3)', borderRadius: 10, padding: '12px 16px' }}>
+            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Sentimiento del mercado
+            </div>
+            {loadingMarket && !fng ? (
+              <div style={{ fontSize: 12, color: 'var(--text2)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} /> Cargando...
+              </div>
+            ) : fng ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 32, fontWeight: 800, color: fngColor, lineHeight: 1 }}>{fngVal}</div>
+                  <div style={{ fontSize: 12, color: fngColor, fontWeight: 600 }}>{fngLbl}</div>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', height: 10, borderRadius: 5, overflow: 'hidden', marginBottom: 4 }}>
+                    {[['#ef4444', 25], ['#f97316', 20], ['#f59e0b', 10], ['#84cc16', 20], ['#22c55e', 25]].map(([c, w], i) => (
+                      <div key={i} style={{ flex: w as number, background: c as string, opacity: 0.7 }} />
+                    ))}
+                  </div>
+                  <div style={{ position: 'relative', height: 6 }}>
+                    <div style={{ position: 'absolute', left: `${fngVal}%`, transform: 'translateX(-50%)', width: 2, height: 6, background: fngColor, borderRadius: 2 }} />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--text2)', marginTop: 4 }}>
+                    <span>Miedo extremo</span><span>Neutral</span><span>Codicia extrema</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 6 }}>
+                    {fngVal <= 30 ? '📌 Históricamente, miedo extremo = oportunidad de compra' :
+                     fngVal >= 75 ? '📌 Codicia extrema — precaución, mercado puede estar sobrecomprado' :
+                     '📌 Sentimiento neutro — mercado sin señales extremas'}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ fontSize: 12, color: 'var(--text2)' }}>No disponible</div>
+            )}
+          </div>
+
+          {/* Analyst consensus */}
+          {analystSymbols.length > 0 && (
+            <div style={{ background: 'var(--bg3)', borderRadius: 10, padding: '12px 16px' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Consenso de analistas
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {analystSymbols.map(sym => {
+                  const a = analysts[sym];
+                  const recColor = a.rec.toLowerCase().includes('buy') || a.rec.toLowerCase().includes('strong') ? 'var(--green)' :
+                    a.rec.toLowerCase().includes('sell') ? 'var(--red)' : 'var(--amber)';
+                  return (
+                    <div key={sym} style={{ display: 'grid', gridTemplateColumns: '60px 1fr 1fr 1fr', gap: 8, alignItems: 'center', fontSize: 12 }}>
+                      <span style={{ fontWeight: 700 }}>{sym}</span>
+                      <span style={{ color: recColor, fontWeight: 600 }}>{a.rec || '-'}</span>
+                      <span style={{ color: 'var(--text2)' }}>Obj. ${a.targetConsensus > 0 ? a.targetConsensus.toFixed(0) : '-'}</span>
+                      <span style={{ color: 'var(--text2)', fontSize: 10 }}>${a.targetLow > 0 ? a.targetLow.toFixed(0) : '-'} – ${a.targetHigh > 0 ? a.targetHigh.toFixed(0) : '-'}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* News alerts */}
+          {news.length > 0 && (
+            <div style={{ background: 'var(--bg3)', borderRadius: 10, padding: '12px 16px' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Alertas de mercado recientes
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {news.slice(0, 5).map((n, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12 }}>
+                    <span style={{ fontSize: 10, background: 'rgba(59,130,246,0.2)', color: 'var(--blue)', padding: '1px 5px', borderRadius: 3, fontWeight: 700, flexShrink: 0, height: 'fit-content' }}>{n.symbol}</span>
+                    <div>
+                      <div style={{ lineHeight: 1.4 }}>{n.title}</div>
+                      <div style={{ fontSize: 10, color: 'var(--text2)', marginTop: 1 }}>{n.site} · {n.publishedDate?.slice(0, 10)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* AI Analysis */}
+          {anthropicKey && (
+            <div style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.25)', borderRadius: 10, padding: '12px 14px' }}>
+              {aiText ? (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600 }}>
+                      <Bot size={14} style={{ color: '#a78bfa' }} /> Análisis IA completo
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {cacheAge > 0 && <span style={{ fontSize: 10, color: 'var(--text2)' }}>hace {cacheAge < 60 ? `${cacheAge}min` : `${Math.floor(cacheAge/60)}h`}</span>}
+                      <button className="btn-icon" style={{ padding: '3px 7px', fontSize: 11 }} onClick={() => askAI(true)} disabled={aiLoading} title="Regenerar análisis">
+                        <RefreshCw size={11} style={{ animation: aiLoading ? 'spin 1s linear infinite' : 'none' }} />
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 12, lineHeight: 1.7, whiteSpace: 'pre-wrap', color: 'var(--text)' }}>{aiText}</div>
+                </>
+              ) : (
+                <button className="btn-secondary" style={{ width: '100%', justifyContent: 'center', fontSize: 13 }} onClick={() => askAI()} disabled={aiLoading}>
+                  {aiLoading
+                    ? <><RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> Generando análisis completo...</>
+                    : <><Bot size={13} style={{ color: '#a78bfa' }} /> Análisis IA con datos reales de mercado</>}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{ display: 'flex', gap: 8, marginTop: 14, flexShrink: 0 }}>
+          <button className="btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={onClose}>Cerrar</button>
+          <button className="btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => { onClose(); onIAClick(); }}>
+            <Bot size={14} /> Mejorar score con IA
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ——— Modal Score Posición ———
+function ModalScorePosicion({ posicion, peso, pnlPct, onClose }: { posicion: Posicion; peso: number; pnlPct: number; onClose: () => void }) {
+  const posScore = Math.min(100, Math.max(0, 50 + pnlPct * 0.5));
+  const scoreColor = posScore >= 60 ? 'var(--green)' : posScore >= 40 ? 'var(--amber)' : 'var(--red)';
+  const metrics = [
+    { label: 'Rentabilidad desde compra', value: `${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%`, color: pnlPct >= 0 ? 'var(--green)' : 'var(--red)' },
+    { label: 'Peso en cartera', value: `${peso.toFixed(1)}%`, color: peso > 33 ? 'var(--amber)' : 'var(--text)' },
+    { label: 'Precio medio de compra', value: `${posicion.divisa === 'EUR' ? '€' : '$'}${posicion.precioMedio.toFixed(2)}`, color: 'var(--text)' },
+    { label: 'Tipo de activo', value: posicion.tipo, color: 'var(--text)' },
+  ];
+  return (
+    <div className="modal-overlay">
+      <div className="modal" style={{ maxWidth: 400 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div>
+            <h2 style={{ fontSize: 17, fontWeight: 700 }}>Score de {posicion.tipo === 'Fondo Indexado' ? posicion.nombre.slice(0, 22) : posicion.simbolo}</h2>
+            <div style={{ fontSize: 12, color: 'var(--text2)' }}>{posicion.nombre}</div>
+          </div>
+          <button className="btn-icon" onClick={onClose}><X size={16} /></button>
+        </div>
+        <div style={{ textAlign: 'center', padding: '18px 0', background: 'var(--bg3)', borderRadius: 12, marginBottom: 14 }}>
+          <div style={{ fontSize: 46, fontWeight: 800, color: scoreColor }}>{Math.round(posScore)}</div>
+          <div style={{ fontSize: 12, color: 'var(--text2)' }}>de 100 puntos</div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+          {metrics.map(m => (
+            <div key={m.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg3)', borderRadius: 8 }}>
+              <span style={{ fontSize: 12, color: 'var(--text2)' }}>{m.label}</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: m.color }}>{m.value}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ background: 'var(--bg3)', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12 }}>
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>¿Qué afecta a este score?</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, color: 'var(--text2)', lineHeight: 1.5 }}>
+            <div>{pnlPct >= 0 ? '✅' : '⚠️'} Rentabilidad: {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}% desde el precio medio de compra</div>
+            <div>{peso <= 20 ? '✅' : '⚠️'} Peso en cartera: {peso.toFixed(1)}%{peso > 33 ? ' — concentración alta, considerar reducir' : ''}</div>
+            <div>{posicion.tipo === 'ETF' || posicion.tipo === 'Fondo Indexado' ? '✅' : '➡️'} {posicion.tipo}{posicion.tipo === 'ETF' || posicion.tipo === 'Fondo Indexado' ? ' — diversificación intrínseca alta' : ' — posición individual'}</div>
+          </div>
+        </div>
+        <button className="btn-secondary" style={{ width: '100%', justifyContent: 'center' }} onClick={onClose}>Cerrar</button>
+      </div>
+    </div>
+  );
+}
+
+// ——— Modal Recomendación ———
+function ModalRecomendacion({ posicion, peso, pnlPct, onClose }: { posicion: Posicion; peso: number; pnlPct: number; onClose: () => void }) {
+  const rec = getRecomendacion(pnlPct, peso);
+  const recColors: Record<string, string> = { COMPRAR: 'var(--green)', MANTENER: 'var(--blue)', VENDER: 'var(--amber)' };
+  const color = recColors[rec];
+  const razones: Record<string, string[]> = {
+    COMPRAR: [
+      `${posicion.tipo === 'Fondo Indexado' ? posicion.nombre : posicion.simbolo} cotiza ${Math.abs(pnlPct).toFixed(1)}% por debajo de tu precio medio de compra.`,
+      'Si mantienes convicción en el activo, puede ser buen momento para promediar a la baja.',
+      'Asegúrate de que el peso total no supere el 25-30% de tu cartera.',
+    ],
+    MANTENER: [
+      `Rendimiento de ${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}% y peso equilibrado del ${peso.toFixed(1)}%.`,
+      'No hay señales urgentes de acción. La posición está en rangos saludables.',
+      'Revisa periódicamente si el tesis de inversión sigue siendo válido.',
+    ],
+    VENDER: [
+      pnlPct > 25 ? `La posición acumula +${pnlPct.toFixed(1)}% de rentabilidad — beneficios significativos.` : `Representa el ${peso.toFixed(1)}% de la cartera — concentración elevada.`,
+      pnlPct > 25 ? 'Considera tomar beneficios parciales y reequilibrar.' : 'Reducir esta posición mejoraría la diversificación.',
+      'Una reducción parcial (25-50%) suele ser más prudente que vender toda la posición.',
+    ],
+  };
+  return (
+    <div className="modal-overlay">
+      <div className="modal" style={{ maxWidth: 400 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div>
+            <h2 style={{ fontSize: 17, fontWeight: 700 }}>Recomendación</h2>
+            <div style={{ fontSize: 12, color: 'var(--text2)' }}>{posicion.tipo === 'Fondo Indexado' ? posicion.nombre : `${posicion.simbolo} · ${posicion.nombre}`}</div>
+          </div>
+          <button className="btn-icon" onClick={onClose}><X size={16} /></button>
+        </div>
+        <div style={{ textAlign: 'center', padding: '16px', background: `${color}18`, border: `1px solid ${color}44`, borderRadius: 12, marginBottom: 16 }}>
+          <div style={{ fontSize: 26, fontWeight: 800, color }}>{rec}</div>
+          <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 4 }}>Basado en rentabilidad y peso en cartera</div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+          {razones[rec].map((r, i) => (
+            <div key={i} style={{ display: 'flex', gap: 10, padding: '10px 12px', background: 'var(--bg3)', borderRadius: 8 }}>
+              <span style={{ fontSize: 14, flexShrink: 0 }}>{i === 0 ? '📊' : i === 1 ? '💡' : '⚠️'}</span>
+              <span style={{ fontSize: 13, lineHeight: 1.5 }}>{r}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ background: 'var(--bg3)', borderRadius: 6, padding: '7px 12px', marginBottom: 12, fontSize: 11, color: 'var(--text2)' }}>
+          ⚠️ Esto no es asesoramiento financiero profesional. Consulta con un experto antes de actuar.
+        </div>
+        <button className="btn-secondary" style={{ width: '100%', justifyContent: 'center' }} onClick={onClose}>Entendido</button>
+      </div>
+    </div>
+  );
+}
+
 export default function Inversiones() {
   const { posiciones, removePosicion, pesosObjetivo, updatePesoObjetivo } = useInversionesStore();
   const { dividendos, removeDividendo } = useDividendosStore();
@@ -214,6 +700,9 @@ export default function Inversiones() {
   const [, forceTickUpdate] = useState(0);
   const [aiAnalysis, setAiAnalysis] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
+  const [showScoreGeneral, setShowScoreGeneral] = useState(false);
+  const [scorePosicionModal, setScorePosicionModal] = useState<{ posicion: Posicion; peso: number; pnlPct: number } | null>(null);
+  const [recModal, setRecModal] = useState<{ posicion: Posicion; peso: number; pnlPct: number } | null>(null);
 
   useEffect(() => {
     const interval = setInterval(() => forceTickUpdate(n => n + 1), 60_000);
@@ -238,14 +727,8 @@ export default function Inversiones() {
   const pnlEur = valorTotal - costeTotal;
   const pnlPct = costeTotal > 0 ? (pnlEur / costeTotal) * 100 : 0;
 
-  // Score: avg of individual pnl pcts, capped 0–100
-  const scores = posiciones.map(p => {
-    const curr = getPrice(p);
-    return ((curr - p.precioMedio) / p.precioMedio) * 100;
-  });
-  const avgScore = posiciones.length > 0
-    ? Math.min(100, Math.max(0, 50 + scores.reduce((a, b) => a + b, 0) / scores.length))
-    : 0;
+  const scoreCartera = calcScoreCartera(posiciones, getPrice, valorTotal);
+  const avgScore = scoreCartera.total;
 
   const minutesAgoStr = (date: Date) => {
     const mins = Math.floor((Date.now() - date.getTime()) / 60_000);
@@ -400,8 +883,8 @@ export default function Inversiones() {
                 <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Invertido</div>
                 <div style={{ fontSize: 20, fontWeight: 700 }}>{fmtEur(costeTotal)}</div>
               </div>
-              <div>
-                <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Score</div>
+              <div style={{ cursor: 'pointer' }} onClick={() => setShowScoreGeneral(true)} title="Ver desglose del score">
+                <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Score ↗</div>
                 <div style={{ fontSize: 20, fontWeight: 700, color: avgScore >= 60 ? 'var(--green)' : avgScore >= 40 ? 'var(--amber)' : 'var(--red)' }}>
                   {Number(avgScore ?? 0).toFixed(0)}/100
                 </div>
@@ -506,6 +989,12 @@ export default function Inversiones() {
                           VL
                         </button>
                       )}
+                      <button className="btn-icon" style={{ padding: '4px 7px', fontSize: 10, fontWeight: 700, color: pnlPosP >= 0 ? 'var(--green)' : 'var(--red)' }} title="Ver score de esta posición" onClick={() => setScorePosicionModal({ posicion: p, peso, pnlPct: pnlPosP })}>
+                        Score
+                      </button>
+                      <button className="btn-icon" style={{ padding: '4px 7px', fontSize: 10, fontWeight: 700, color: 'var(--blue)' }} title="Ver recomendación" onClick={() => setRecModal({ posicion: p, peso, pnlPct: pnlPosP })}>
+                        Rec
+                      </button>
                       <button className="btn-icon" style={{ padding: 6 }} title="Editar" onClick={() => setEditPosicion(p)}>
                         <Pencil size={13} />
                       </button>
@@ -797,6 +1286,9 @@ export default function Inversiones() {
       {editPosicion && <ModalEditPosicion posicion={editPosicion} onClose={() => setEditPosicion(null)} />}
       {showDivModal && <ModalDividendo posiciones={posiciones} onClose={() => setShowDivModal(false)} />}
       {editDiv && <ModalDividendo dividendo={editDiv} posiciones={posiciones} onClose={() => setEditDiv(null)} />}
+      {showScoreGeneral && <ModalScoreGeneral scoreData={scoreCartera} posiciones={posiciones} getPrice={getPrice} valorTotal={valorTotal} onClose={() => setShowScoreGeneral(false)} onIAClick={analyzeWithAI} />}
+      {scorePosicionModal && <ModalScorePosicion posicion={scorePosicionModal.posicion} peso={scorePosicionModal.peso} pnlPct={scorePosicionModal.pnlPct} onClose={() => setScorePosicionModal(null)} />}
+      {recModal && <ModalRecomendacion posicion={recModal.posicion} peso={recModal.peso} pnlPct={recModal.pnlPct} onClose={() => setRecModal(null)} />}
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );

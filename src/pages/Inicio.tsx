@@ -16,6 +16,7 @@ import { fmtEur, toEur } from '../utils/format';
 import { useMercadoStore } from '../stores/useMercadoStore';
 import { MOCK_TICKERS } from '../services/alphaVantage';
 import { buildFinancialContext, callClaudeAPI, SYSTEM_PROMPT } from '../utils/aiContext';
+import { getFearAndGreed } from '../services/financialModelingPrep';
 import ModalIngreso from '../components/ModalIngreso';
 import ModalGasto from '../components/ModalGasto';
 import ModalAddPosicion from '../components/ModalAddPosicion';
@@ -819,6 +820,17 @@ export default function Inicio() {
   const { anthropicKey } = useConfigStore();
   const [aiInsights, setAiInsights] = useState<string[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
+  const [fng, setFng] = useState<{ value: number; label: string; color: string } | null>(null);
+
+  useEffect(() => {
+    getFearAndGreed().then(data => {
+      if (!data) return;
+      const v = parseInt(data.value);
+      const color = v <= 25 ? '#ef4444' : v <= 45 ? '#f97316' : v <= 55 ? '#f59e0b' : v <= 75 ? '#84cc16' : '#22c55e';
+      const label = v <= 25 ? 'Miedo extremo' : v <= 45 ? 'Miedo' : v <= 55 ? 'Neutral' : v <= 75 ? 'Codicia' : 'Codicia extrema';
+      setFng({ value: v, label, color });
+    }).catch(() => {});
+  }, []);
 
   // Net worth
   const saldoCuentas = cuentas.reduce((sum, c) => sum + toEur(c.saldo, c.divisa), 0);
@@ -1024,7 +1036,7 @@ export default function Inicio() {
       </div>
 
       {/* Quick actions */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
         <button className="card card-hover" style={{ textAlign: 'left', border: 'none', cursor: 'pointer', background: 'rgba(59,130,246,0.1)', borderColor: 'rgba(59,130,246,0.3)' }} onClick={() => setShowModalIngreso(true)}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             <div style={{ background: 'var(--blue)', borderRadius: 6, padding: 6 }}><Plus size={14} color="white" /></div>
@@ -1046,6 +1058,21 @@ export default function Inicio() {
           </div>
           <p style={{ fontSize: 12, color: 'var(--text2)' }}>Ver análisis</p>
         </button>
+        {/* Fear & Greed widget */}
+        <div className="card" style={{ background: fng ? `${fng.color}12` : 'var(--bg2)', borderColor: fng ? `${fng.color}40` : 'var(--border)' }}>
+          <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 4 }}>Fear & Greed</div>
+          {fng ? (
+            <>
+              <div style={{ fontSize: 24, fontWeight: 800, color: fng.color, lineHeight: 1, marginBottom: 2 }}>{fng.value}</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: fng.color }}>{fng.label}</div>
+              <div style={{ background: 'var(--bg2)', borderRadius: 3, height: 4, overflow: 'hidden', marginTop: 6 }}>
+                <div style={{ height: '100%', width: `${fng.value}%`, background: `linear-gradient(90deg, #ef4444, #f59e0b, #22c55e)`, borderRadius: 3 }} />
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize: 12, color: 'var(--text2)' }}>Cargando...</div>
+          )}
+        </div>
       </div>
 
       {/* Month summary — CLICKABLE */}

@@ -154,6 +154,57 @@ export async function testFMPConnection(apiKey: string): Promise<boolean> {
   } catch { return false; }
 }
 
+export interface NewsItem {
+  symbol: string;
+  publishedDate: string;
+  title: string;
+  image: string;
+  site: string;
+  text: string;
+  url: string;
+}
+
+export async function getStockNews(symbols: string[]): Promise<NewsItem[]> {
+  const key = getKey();
+  if (!key || symbols.length === 0) return [];
+  const tickers = symbols.join(',');
+  const cacheKey = `news_${tickers}`;
+  const FIFTEEN_MIN = 15 * 60 * 1000;
+  if (CACHE[cacheKey] && Date.now() - CACHE[cacheKey].ts < FIFTEEN_MIN) {
+    return CACHE[cacheKey].data as NewsItem[];
+  }
+  await rateLimit();
+  try {
+    const r = await fetch(`${BASE}/stock_news?tickers=${tickers}&limit=5&apikey=${key}`);
+    if (!r.ok) return [];
+    const data = await r.json();
+    const items = Array.isArray(data) ? data : [];
+    CACHE[cacheKey] = { data: items, ts: Date.now() };
+    return items;
+  } catch { return []; }
+}
+
+export interface FearGreedData {
+  value: string;
+  value_classification: string;
+  timestamp: string;
+}
+
+const FNG_CACHE: { data: FearGreedData | null; ts: number } = { data: null, ts: 0 };
+const SIX_HOURS = 6 * 60 * 60 * 1000;
+
+export async function getFearAndGreed(): Promise<FearGreedData | null> {
+  if (FNG_CACHE.data && Date.now() - FNG_CACHE.ts < SIX_HOURS) return FNG_CACHE.data;
+  try {
+    const r = await fetch('https://api.alternative.me/fng/?limit=1');
+    if (!r.ok) return null;
+    const json = await r.json();
+    const item: FearGreedData = json?.data?.[0] ?? null;
+    if (item) { FNG_CACHE.data = item; FNG_CACHE.ts = Date.now(); }
+    return item;
+  } catch { return null; }
+}
+
 export function clearFMPCache() {
   Object.keys(CACHE).forEach(k => delete CACHE[k]);
 }
