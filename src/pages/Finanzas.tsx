@@ -11,6 +11,7 @@ import { useInmuebleStore } from '../stores/useInmuebleStore';
 import type { Inmueble, InmuebleTipo } from '../stores/useInmuebleStore';
 import { useSuscripcionesStore, importeMensual } from '../stores/useSuscripcionesStore';
 import type { Suscripcion, SuscripcionCategoria, SuscripcionFrecuencia } from '../stores/useSuscripcionesStore';
+import { useFacturasStore } from '../stores/useFacturasStore';
 import { fmtEur, fmt, toEur } from '../utils/format';
 import ModalIngreso from '../components/ModalIngreso';
 import ModalGasto from '../components/ModalGasto';
@@ -19,7 +20,7 @@ import toast from 'react-hot-toast';
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const MESES_ES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 const CAT_ICONS: Record<string, string> = {
-  Salario: '💼', Freelance: '💻', Dividendo: '📈', Alquiler: '🏠', Otros: '💰',
+  Salario: '💼', Freelance: '💻', Autónomo: '📋', Dividendo: '📈', Alquiler: '🏠', Otros: '💰',
   Vivienda: '🏠', Alimentación: '🛒', Transporte: '🚌', Ocio: '🎮', Salud: '❤️', Suscripciones: '📺',
 };
 
@@ -1785,6 +1786,8 @@ function TabSuscripciones() {
 
 export default function Finanzas() {
   const { ingresos, gastos, cuentas, planInversion, setPlanInversion, removeIngreso, removeGasto, removeCuenta } = useFinanzasStore();
+  const { inmuebles } = useInmuebleStore();
+  const { facturas } = useFacturasStore();
   const now = new Date();
   const [mainTab, setMainTab] = useState<'resumen' | 'deudas' | 'presupuestos' | 'proyeccion' | 'inmuebles' | 'suscripciones'>('resumen');
   const [year, setYear] = useState(now.getFullYear());
@@ -1799,16 +1802,42 @@ export default function Finanzas() {
   const [planModal, setPlanModal] = useState<'invertir' | 'gastos' | 'libre' | null>(null);
 
   const handleDeleteIngreso = (ing: Ingreso) => {
+    if (ing.origen) {
+      toast('Para gestionar este ingreso ve a la sección Inmobiliario o Facturas', { icon: '🏠' });
+      return;
+    }
     if (window.confirm(`¿Eliminar "${ing.nombre}"?`)) {
       removeIngreso(ing.id);
       toast.success('Ingreso eliminado');
     }
   };
   const handleDeleteGasto = (gas: Gasto) => {
+    if (gas.origen) {
+      toast('Para gestionar este gasto ve a la sección Inmobiliario', { icon: '🏠' });
+      return;
+    }
     if (window.confirm(`¿Eliminar "${gas.nombre}"?`)) {
       removeGasto(gas.id);
       toast.success('Gasto eliminado');
     }
+  };
+  const handleEditIngreso = (ing: Ingreso) => {
+    if (ing.origen === 'inmobiliario') {
+      toast('Para editar este ingreso ve a la sección Inmobiliario', { icon: '🏠' });
+      return;
+    }
+    if (ing.origen === 'factura') {
+      toast('Para editar esta factura ve a la sección Facturas', { icon: '📄' });
+      return;
+    }
+    setEditIngreso(ing);
+  };
+  const handleEditGasto = (gas: Gasto) => {
+    if (gas.origen) {
+      toast('Para editar este gasto ve a la sección Inmobiliario', { icon: '🏠' });
+      return;
+    }
+    setEditGasto(gas);
   };
   const handleDeleteCuenta = (c: Cuenta) => {
     if (window.confirm(`¿Eliminar la cuenta "${c.nombre}"? Esta acción no se puede deshacer.`)) {
@@ -1829,8 +1858,55 @@ export default function Finanzas() {
   const key = getMonthKey(year, month);
   const ingMes = ingresos.filter(i => i.fecha.startsWith(key));
   const gasMes = gastos.filter(g => g.fecha.startsWith(key));
-  const totalIng = ingMes.reduce((s, i) => s + i.importe, 0);
-  const totalGas = gasMes.reduce((s, g) => s + g.importe, 0);
+
+  // Synthetic ingresos from inmuebles con renta
+  const syntheticIngInm: Ingreso[] = inmuebles
+    .filter(inm => inm.generaRenta && inm.rentaMensualBruta > 0)
+    .map(inm => ({
+      id: `inm-${inm.id}`,
+      nombre: `Alquiler — ${inm.nombre}`,
+      categoria: 'Alquiler' as const,
+      importe: inm.rentaMensualBruta,
+      fecha: `${key}-01`,
+      recurrente: true,
+      origen: 'inmobiliario' as const,
+      origenId: inm.id,
+    }));
+
+  // Synthetic ingresos from facturas cobradas este mes
+  const syntheticIngFac: Ingreso[] = facturas
+    .filter(f => f.estado === 'Cobrada' && f.fechaEmision.startsWith(key))
+    .map(f => ({
+      id: `fac-${f.id}`,
+      nombre: `Factura ${f.numero}`,
+      categoria: 'Autónomo' as const,
+      importe: f.total,
+      fecha: f.fechaEmision,
+      recurrente: false,
+      origen: 'factura' as const,
+      origenId: f.id,
+    }));
+
+  // Synthetic gastos from inmuebles con renta
+  const syntheticGasInm: Gasto[] = inmuebles
+    .filter(inm => inm.generaRenta)
+    .map(inm => ({
+      id: `inm-gas-${inm.id}`,
+      nombre: `Gastos — ${inm.nombre}`,
+      categoria: 'Vivienda' as const,
+      importe: inm.gastosIbiMes + inm.gastosComunidad + inm.gastosSeguro + inm.gastosMantenimiento + inm.gastosOtros,
+      fecha: `${key}-01`,
+      recurrente: true,
+      origen: 'inmobiliario' as const,
+      origenId: inm.id,
+    }))
+    .filter(g => g.importe > 0);
+
+  const allIngMes = [...ingMes, ...syntheticIngInm, ...syntheticIngFac];
+  const allGasMes = [...gasMes, ...syntheticGasInm];
+
+  const totalIng = allIngMes.reduce((s, i) => s + i.importe, 0);
+  const totalGas = allGasMes.reduce((s, g) => s + g.importe, 0);
   const ahorro = totalIng - totalGas;
   const chartData = buildLast6Months(ingresos, gastos);
   const tituloMes = `${MESES_ES[month]} ${year}`;
@@ -1865,7 +1941,7 @@ export default function Finanzas() {
       </div>
 
       {mainTab === 'deudas' && <TabDeudas />}
-      {mainTab === 'presupuestos' && <TabPresupuestos gastos={gasMes} tituloMes={tituloMes} />}
+      {mainTab === 'presupuestos' && <TabPresupuestos gastos={allGasMes} tituloMes={tituloMes} />}
       {mainTab === 'proyeccion' && <TabProyeccion ingresos={ingresos} gastos={gastos} />}
       {mainTab === 'inmuebles' && <TabInmuebles />}
       {mainTab === 'suscripciones' && <TabSuscripciones />}
@@ -1890,7 +1966,7 @@ export default function Finanzas() {
             <ChevronRight size={14} color="var(--text2)" />
           </div>
           <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--green)' }}>{fmtEur(totalIng)}</div>
-          <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 4 }}>{ingMes.length} entradas · ver detalle</div>
+          <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 4 }}>{allIngMes.length} entradas · ver detalle</div>
         </div>
         <div className="card card-hover" style={{ cursor: 'pointer' }} onClick={() => setPanel('gastos')}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
@@ -1898,7 +1974,7 @@ export default function Finanzas() {
             <ChevronRight size={14} color="var(--text2)" />
           </div>
           <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--red)' }}>{fmtEur(totalGas)}</div>
-          <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 4 }}>{gasMes.length} entradas · ver detalle</div>
+          <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 4 }}>{allGasMes.length} entradas · ver detalle</div>
         </div>
         <div className="card card-hover" style={{ cursor: 'pointer' }} onClick={() => setPanel('ahorro')}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
@@ -1915,27 +1991,38 @@ export default function Finanzas() {
       {/* Ingresos list */}
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <h3 style={{ fontSize: 16, fontWeight: 700 }}>Ingresos</h3>
+          <div>
+            <h3 style={{ fontSize: 16, fontWeight: 700 }}>Ingresos</h3>
+            {(syntheticIngInm.length + syntheticIngFac.length) > 0 && (
+              <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 2 }}>
+                {syntheticIngInm.length + syntheticIngFac.length} automáticos · {ingMes.length} manuales
+              </div>
+            )}
+          </div>
           <button className="btn-primary" style={{ padding: '6px 12px', fontSize: 12 }} onClick={() => setShowModalIngreso(true)}>
             <Plus size={14} /> Añadir
           </button>
         </div>
-        {ingMes.length === 0 ? (
+        {allIngMes.length === 0 ? (
           <p style={{ color: 'var(--text2)', fontSize: 14, textAlign: 'center', padding: 20 }}>No hay ingresos este mes</p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {ingMes.map((ing) => (
+            {allIngMes.map((ing) => (
               <div key={ing.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'var(--bg3)', borderRadius: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ width: 8, height: 8, background: 'var(--green)', borderRadius: '50%', flexShrink: 0 }} />
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 500 }}>{ing.nombre}</div>
+                    <div style={{ fontSize: 14, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {ing.nombre}
+                      {ing.origen === 'inmobiliario' && <span style={{ fontSize: 10, background: 'rgba(59,130,246,0.15)', color: 'var(--blue)', borderRadius: 4, padding: '1px 5px', fontWeight: 600 }}>🏠 Auto</span>}
+                      {ing.origen === 'factura' && <span style={{ fontSize: 10, background: 'rgba(168,85,247,0.15)', color: 'var(--purple)', borderRadius: 4, padding: '1px 5px', fontWeight: 600 }}>📄 Auto</span>}
+                    </div>
                     <div style={{ fontSize: 12, color: 'var(--text2)' }}>{ing.categoria} · {ing.fecha} {ing.recurrente && '· 🔄'}</div>
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ color: 'var(--green)', fontWeight: 600, marginRight: 4 }}>+{fmtEur(ing.importe)}</span>
-                  <button className="btn-icon" style={{ padding: 6 }} title="Editar" onClick={() => setEditIngreso(ing)}>
+                  <button className="btn-icon" style={{ padding: 6 }} title="Editar" onClick={() => handleEditIngreso(ing)}>
                     <Pencil size={13} />
                   </button>
                   <button className="btn-icon" style={{ padding: 6 }} title="Eliminar" onClick={() => handleDeleteIngreso(ing)}>
@@ -1951,27 +2038,37 @@ export default function Finanzas() {
       {/* Gastos list */}
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <h3 style={{ fontSize: 16, fontWeight: 700 }}>Gastos</h3>
+          <div>
+            <h3 style={{ fontSize: 16, fontWeight: 700 }}>Gastos</h3>
+            {syntheticGasInm.length > 0 && (
+              <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 2 }}>
+                {syntheticGasInm.length} automáticos · {gasMes.length} manuales
+              </div>
+            )}
+          </div>
           <button className="btn-primary" style={{ padding: '6px 12px', fontSize: 12 }} onClick={() => setShowModalGasto(true)}>
             <Plus size={14} /> Añadir
           </button>
         </div>
-        {gasMes.length === 0 ? (
+        {allGasMes.length === 0 ? (
           <p style={{ color: 'var(--text2)', fontSize: 14, textAlign: 'center', padding: 20 }}>No hay gastos este mes</p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {gasMes.map((gas) => (
+            {allGasMes.map((gas) => (
               <div key={gas.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'var(--bg3)', borderRadius: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ width: 8, height: 8, background: 'var(--red)', borderRadius: '50%', flexShrink: 0 }} />
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 500 }}>{gas.nombre}</div>
+                    <div style={{ fontSize: 14, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {gas.nombre}
+                      {gas.origen === 'inmobiliario' && <span style={{ fontSize: 10, background: 'rgba(59,130,246,0.15)', color: 'var(--blue)', borderRadius: 4, padding: '1px 5px', fontWeight: 600 }}>🏠 Auto</span>}
+                    </div>
                     <div style={{ fontSize: 12, color: 'var(--text2)' }}>{gas.categoria} · {gas.fecha} {gas.recurrente && '· 🔄'}</div>
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ color: 'var(--red)', fontWeight: 600, marginRight: 4 }}>-{fmtEur(gas.importe)}</span>
-                  <button className="btn-icon" style={{ padding: 6 }} title="Editar" onClick={() => setEditGasto(gas)}>
+                  <button className="btn-icon" style={{ padding: 6 }} title="Editar" onClick={() => handleEditGasto(gas)}>
                     <Pencil size={13} />
                   </button>
                   <button className="btn-icon" style={{ padding: 6 }} title="Eliminar" onClick={() => handleDeleteGasto(gas)}>

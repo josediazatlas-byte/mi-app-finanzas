@@ -42,7 +42,7 @@ export default function ModalIngreso({ onClose, ingreso }: Props) {
           <div>
             <label className="label">Categoría</label>
             <select className="select" value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value as Ingreso['categoria'] })}>
-              {['Salario', 'Freelance', 'Dividendo', 'Alquiler', 'Otros'].map(c => <option key={c}>{c}</option>)}
+              {['Salario', 'Freelance', 'Autónomo', 'Dividendo', 'Alquiler', 'Otros'].map(c => <option key={c}>{c}</option>)}
             </select>
           </div>
           <div>

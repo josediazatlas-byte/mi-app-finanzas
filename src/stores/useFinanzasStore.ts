@@ -3,11 +3,13 @@ import { persist } from 'zustand/middleware';
 
 export interface Ingreso {
   id: string;
-  categoria: 'Salario' | 'Freelance' | 'Dividendo' | 'Alquiler' | 'Otros';
+  categoria: 'Salario' | 'Freelance' | 'Autónomo' | 'Dividendo' | 'Alquiler' | 'Otros';
   nombre: string;
   importe: number;
   fecha: string;
   recurrente: boolean;
+  origen?: 'inmobiliario' | 'factura' | 'manual';
+  origenId?: string;
 }
 
 export interface Gasto {
@@ -17,6 +19,8 @@ export interface Gasto {
   importe: number;
   fecha: string;
   recurrente: boolean;
+  origen?: 'inmobiliario' | 'factura' | 'manual';
+  origenId?: string;
 }
 
 export interface Cuenta {
