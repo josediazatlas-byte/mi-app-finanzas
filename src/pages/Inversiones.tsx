@@ -144,8 +144,15 @@ export default function Inversiones() {
   const [showDivModal, setShowDivModal] = useState(false);
   const [editDiv, setEditDiv] = useState<Dividendo | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [, forceTickUpdate] = useState(0);
   const [aiAnalysis, setAiAnalysis] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
+
+  useEffect(() => {
+    const interval = setInterval(() => forceTickUpdate(n => n + 1), 60_000);
+    return () => clearInterval(interval);
+  }, []);
 
   const getPrice = (p: Posicion): number => {
     const cached = precios[p.simbolo];
@@ -172,8 +179,17 @@ export default function Inversiones() {
     ? Math.min(100, Math.max(0, 50 + scores.reduce((a, b) => a + b, 0) / scores.length))
     : 0;
 
+  const minutesAgoStr = (date: Date) => {
+    const mins = Math.floor((Date.now() - date.getTime()) / 60_000);
+    if (mins < 1) return 'hace un momento';
+    if (mins === 1) return 'hace 1 minuto';
+    return `hace ${mins} minutos`;
+  };
+
   const refresh = async () => {
     setRefreshing(true);
+    let anyRateLimited = false;
+
     // Separate crypto and non-crypto positions
     const cryptoPos = posiciones.filter(p => p.tipo === 'Crypto' || isCryptoSymbol(p.simbolo));
     const stockPos = posiciones.filter(p => p.tipo !== 'Crypto' && !isCryptoSymbol(p.simbolo));
@@ -181,7 +197,10 @@ export default function Inversiones() {
     // Refresh stocks via Alpha Vantage
     await Promise.all(stockPos.map(async (p) => {
       const q = await getQuote(p.simbolo);
-      if (q) setPrice(p.simbolo, q.price, q.change);
+      if (q) {
+        setPrice(p.simbolo, q.price, q.change);
+        if (q.rateLimited) anyRateLimited = true;
+      }
     }));
 
     // Refresh crypto via CoinGecko
@@ -200,7 +219,23 @@ export default function Inversiones() {
         });
       } catch { /* keep cached prices */ }
     }
+
+    const now = new Date();
+    setLastUpdated(now);
     setRefreshing(false);
+
+    if (anyRateLimited) {
+      const timestamps = stockPos.map(p => precios[p.simbolo]?.timestamp ?? 0).filter(t => t > 0);
+      const oldest = timestamps.length > 0 ? Math.min(...timestamps) : 0;
+      const hoursAgo = oldest > 0 ? Math.round((Date.now() - oldest) / 3_600_000) : 0;
+      toast('Límite diario de Alpha Vantage alcanzado' + (hoursAgo > 0 ? ` — precios de hace ${hoursAgo}h` : ' — usando precios de demostración'), {
+        icon: '⚠️',
+        style: { background: '#f59e0b', color: '#1a1a1a' },
+        duration: 5000,
+      });
+    } else {
+      toast.success('Precios actualizados');
+    }
   };
 
   const analyzeWithAI = async () => {
@@ -315,9 +350,16 @@ export default function Inversiones() {
                 </button>
               ))}
             </div>
-            <button className="btn-icon" onClick={refresh} title="Actualizar precios">
-              <RefreshCw size={15} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+              <button className="btn-icon" onClick={refresh} disabled={refreshing} title="Actualizar precios">
+                <RefreshCw size={15} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
+              </button>
+              {lastUpdated && (
+                <span style={{ fontSize: 10, color: 'var(--text2)', whiteSpace: 'nowrap' }}>
+                  {minutesAgoStr(lastUpdated)}
+                </span>
+              )}
+            </div>
             <button className="btn-secondary" style={{ gap: 6, padding: '6px 12px', fontSize: 13 }} onClick={analyzeWithAI} disabled={aiLoading} title="Analizar cartera con IA">
               <Bot size={14} style={{ color: '#a78bfa' }} /> Analizar con IA
             </button>
@@ -391,9 +433,16 @@ export default function Inversiones() {
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 style={{ fontSize: 16, fontWeight: 700 }}>Seguimiento de precios</h3>
-            <button className="btn-icon" onClick={refresh}>
-              <RefreshCw size={15} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+              <button className="btn-icon" onClick={refresh} disabled={refreshing} title="Actualizar precios">
+                <RefreshCw size={15} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
+              </button>
+              {lastUpdated && (
+                <span style={{ fontSize: 10, color: 'var(--text2)', whiteSpace: 'nowrap' }}>
+                  {minutesAgoStr(lastUpdated)}
+                </span>
+              )}
+            </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             {posiciones.map((p, i) => {

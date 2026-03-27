@@ -23,7 +23,7 @@ function getApiKey(): string {
   return localStorage.getItem('av_api_key') || '';
 }
 
-export async function getQuote(symbol: string): Promise<{ price: number; change: number; name: string }> {
+export async function getQuote(symbol: string): Promise<{ price: number; change: number; name: string; rateLimited?: boolean }> {
   const cached = useMercadoStore.getState().getPrice(symbol);
   if (cached) return { price: cached.precio, change: cached.variacion, name: symbol };
 
@@ -41,22 +41,27 @@ export async function getQuote(symbol: string): Promise<{ price: number; change:
     return { price: 0, change: 0, name: symbol };
   }
 
+  let rateLimited = false;
   try {
     const res = await fetch(`${BASE}?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${apiKey}`);
     const data = await res.json();
-    const q = data['Global Quote'];
-    if (q && q['05. price']) {
-      const price = parseFloat(q['05. price']);
-      const change = parseFloat(q['10. change percent']?.replace('%', '') || '0');
-      useMercadoStore.getState().setPrice(symbol, price, change);
-      return { price, change, name: symbol };
+    const limitMsg: string = data.Information || data.Note || '';
+    if (limitMsg && (limitMsg.includes('rate limit') || limitMsg.includes('25 requests') || limitMsg.includes('API call frequency') || limitMsg.includes('premium'))) {
+      rateLimited = true;
+    } else {
+      const q = data['Global Quote'];
+      if (q && q['05. price']) {
+        const price = parseFloat(q['05. price']);
+        const change = parseFloat(q['10. change percent']?.replace('%', '') || '0');
+        useMercadoStore.getState().setPrice(symbol, price, change);
+        return { price, change, name: symbol };
+      }
     }
-    throw new Error('No data');
-  } catch {
-    const mock = MOCK_PRICES[symbol.toUpperCase()];
-    if (mock) return mock;
-    return { price: 0, change: 0, name: symbol };
-  }
+  } catch { /* fall through to mock */ }
+
+  const mock = MOCK_PRICES[symbol.toUpperCase()];
+  if (mock) return { ...mock, rateLimited };
+  return { price: 0, change: 0, name: symbol, rateLimited };
 }
 
 export async function searchSymbol(keywords: string): Promise<Array<{ symbol: string; name: string; type: string }>> {
