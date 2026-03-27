@@ -270,6 +270,7 @@ function PanelPatrimonio({ onClose }: { onClose: () => void }) {
 
   const saldoCuentas = cuentas.reduce((sum, c) => sum + toEur(c.saldo, c.divisa), 0);
   const valorInversiones = posiciones.reduce((sum, p) => {
+    if (p.tipo === 'Fondo Indexado') return sum + (p.vl ?? p.precioMedio) * p.acciones;
     const cached = precios[p.simbolo];
     const precio = cached ? cached.precio : (MOCK_TICKERS.find(t => t.symbol === p.simbolo)?.price ?? p.precioMedio);
     return sum + toEur(precio * p.acciones, p.divisa);

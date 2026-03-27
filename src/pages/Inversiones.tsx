@@ -538,72 +538,10 @@ export default function Inversiones() {
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-            {posiciones.map((p, i) => {
+            {posiciones.filter(p => p.tipo !== 'Fondo Indexado').map((p, i) => {
               const precio = getPrice(p) || 0;
               const cambio = getChange(p) || 0;
               const pnlP = p.precioMedio ? ((precio - p.precioMedio) / p.precioMedio) * 100 : 0;
-              if (p.tipo === 'Fondo Indexado') {
-                const totalInv = p.acciones * p.precioMedio;
-                const valorAct = p.acciones * precio;
-                const pnlFEur = valorAct - totalInv;
-                const dias = p.fechaCompra ? Math.floor((Date.now() - new Date(p.fechaCompra).getTime()) / 86400000) : 0;
-                const anualizadoPct = dias >= 30 && p.precioMedio > 0 && precio > 0
-                  ? (Math.pow(precio / p.precioMedio, 365 / dias) - 1) * 100 : null;
-                return (
-                  <div key={p.id} className="card">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ width: 36, height: 36, borderRadius: 8, background: `${COLORS[i % COLORS.length]}22`, border: `1px solid ${COLORS[i % COLORS.length]}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12, color: COLORS[i % COLORS.length] }}>
-                          {p.nombre.slice(0, 2).toUpperCase()}
-                        </div>
-                        <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <div style={{ fontWeight: 700, fontSize: 13 }}>{p.nombre.slice(0, 22)}</div>
-                            <span style={{ fontSize: 10, background: 'rgba(168,85,247,0.15)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.3)', borderRadius: 4, padding: '1px 5px', fontWeight: 600 }}>Fondo</span>
-                          </div>
-                          <div style={{ fontSize: 11, color: 'var(--text2)' }}>{p.isin}{p.gestora ? ' · ' + p.gestora : ''}</div>
-                        </div>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontWeight: 700, fontSize: 16 }}>{fmtEur(precio)}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text2)' }}>VL {p.vlFecha ?? 'sin actualizar'}</div>
-                      </div>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: anualizadoPct !== null ? '1fr 1fr 1fr 1fr' : '1fr 1fr 1fr', gap: 8 }}>
-                      <div style={{ background: 'var(--bg3)', borderRadius: 6, padding: '6px 10px' }}>
-                        <div style={{ fontSize: 11, color: 'var(--text2)' }}>Compra media</div>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>{fmtEur(p.precioMedio)}</div>
-                      </div>
-                      <div style={{ background: 'var(--bg3)', borderRadius: 6, padding: '6px 10px' }}>
-                        <div style={{ fontSize: 11, color: 'var(--text2)' }}>Participaciones</div>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>{p.acciones}</div>
-                      </div>
-                      <div style={{ background: 'var(--bg3)', borderRadius: 6, padding: '6px 10px' }}>
-                        <div style={{ fontSize: 11, color: 'var(--text2)' }}>P&L total</div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: pnlP >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                          {pnlP >= 0 ? '+' : ''}{pnlP.toFixed(1)}%
-                        </div>
-                      </div>
-                      {anualizadoPct !== null && (
-                        <div style={{ background: 'var(--bg3)', borderRadius: 6, padding: '6px 10px' }}>
-                          <div style={{ fontSize: 11, color: 'var(--text2)' }}>Rentab. anual.</div>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: anualizadoPct >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                            {anualizadoPct >= 0 ? '+' : ''}{anualizadoPct.toFixed(1)}%
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
-                      <div style={{ fontSize: 12, color: 'var(--text2)' }}>
-                        Invertido: {fmtEur(totalInv)} · Valor: {fmtEur(valorAct)} · P&L: <span style={{ color: pnlFEur >= 0 ? 'var(--green)' : 'var(--red)' }}>{pnlFEur >= 0 ? '+' : ''}{fmtEur(pnlFEur)}</span>
-                      </div>
-                      <button style={{ fontSize: 11, padding: '4px 10px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 6, color: 'var(--blue)', cursor: 'pointer' }} onClick={() => setVlModal(p)}>
-                        Actualizar VL
-                      </button>
-                    </div>
-                  </div>
-                );
-              }
               return (
                 <div key={p.id} className="card">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
