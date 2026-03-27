@@ -109,18 +109,19 @@ export async function callClaudeAPI(
   systemPrompt: string,
   apiKey: string
 ): Promise<string> {
-  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+  const resp = await fetch('/api/anthropic', {
     method: 'POST',
     headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages,
+      apiKey,
+      payload: {
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages,
+      },
     }),
   });
   if (!resp.ok) {

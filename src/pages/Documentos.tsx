@@ -408,19 +408,22 @@ function TabTickets() {
     }
     setAnalizando(true);
     try {
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      const resp = await fetch('/api/anthropic', {
         method: 'POST',
-        headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 1024,
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imagenBase64 } },
-              { type: 'text', text: 'Analiza este ticket y extrae un JSON con estos campos exactos: {"establecimiento":"","fecha":"DD/MM/YYYY","total":0,"subtotal":0,"iva":0,"conceptos":[{"descripcion":"","importe":0}],"categoria_sugerida":"Alimentación"}. Las categorías válidas son: Alimentación, Transporte, Vivienda, Ocio, Salud, Restaurantes, Gasolina, Suscripciones, Material oficina, Otros. Responde SOLO con el JSON sin texto adicional.' },
-            ],
-          }],
+          apiKey: anthropicKey,
+          payload: {
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 1024,
+            messages: [{
+              role: 'user',
+              content: [
+                { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imagenBase64 } },
+                { type: 'text', text: 'Analiza este ticket y extrae un JSON con estos campos exactos: {"establecimiento":"","fecha":"DD/MM/YYYY","total":0,"subtotal":0,"iva":0,"conceptos":[{"descripcion":"","importe":0}],"categoria_sugerida":"Alimentación"}. Las categorías válidas son: Alimentación, Transporte, Vivienda, Ocio, Salud, Restaurantes, Gasolina, Suscripciones, Material oficina, Otros. Responde SOLO con el JSON sin texto adicional.' },
+              ],
+            }],
+          },
         }),
       });
       const data = await resp.json();
