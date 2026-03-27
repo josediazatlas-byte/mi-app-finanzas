@@ -8,6 +8,7 @@ import { usePatrimonioStore } from '../stores/usePatrimonioStore';
 import { useHistoricoStore } from '../stores/useHistoricoStore';
 import { useDeudaStore } from '../stores/useDeudaStore';
 import { useInmuebleStore } from '../stores/useInmuebleStore';
+import { useFacturasStore } from '../stores/useFacturasStore';
 import { useMetasStore } from '../stores/useMetasStore';
 import type { Meta, MetaTipo } from '../stores/useMetasStore';
 import { useConfigStore } from '../stores/useConfigStore';
@@ -34,7 +35,13 @@ function PanelIngresos({ ingresos, titulo, onClose }: { ingresos: Ingreso[]; tit
   const [showAdd, setShowAdd] = useState(false);
 
   const handleDelete = (ing: Ingreso) => {
+    if (ing.origen) { toast('Para gestionar este ingreso ve a la sección Inmobiliario o Facturas', { icon: '🏠' }); return; }
     if (window.confirm(`¿Eliminar "${ing.nombre}"?`)) removeIngreso(ing.id);
+  };
+  const handleEdit = (ing: Ingreso) => {
+    if (ing.origen === 'inmobiliario') { toast('Para editar este ingreso ve a la sección Inmobiliario', { icon: '🏠' }); return; }
+    if (ing.origen === 'factura') { toast('Para editar esta factura ve a la sección Facturas', { icon: '📄' }); return; }
+    setEditItem(ing);
   };
 
   return (
@@ -77,11 +84,15 @@ function PanelIngresos({ ingresos, titulo, onClose }: { ingresos: Ingreso[]; tit
                 <div key={ing.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', background: 'var(--bg3)', borderRadius: 8 }}>
                   <span style={{ fontSize: 20, flexShrink: 0 }}>{CAT_ICONS[ing.categoria] ?? '💰'}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ing.nombre}</div>
+                    <div style={{ fontSize: 14, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {ing.nombre}
+                      {ing.origen === 'inmobiliario' && <span style={{ fontSize: 9, background: 'rgba(59,130,246,0.15)', color: 'var(--blue)', borderRadius: 4, padding: '1px 4px', fontWeight: 600, flexShrink: 0 }}>🏠 Auto</span>}
+                      {ing.origen === 'factura' && <span style={{ fontSize: 9, background: 'rgba(168,85,247,0.15)', color: 'var(--purple)', borderRadius: 4, padding: '1px 4px', fontWeight: 600, flexShrink: 0 }}>📄 Auto</span>}
+                    </div>
                     <div style={{ fontSize: 12, color: 'var(--text2)' }}>{ing.categoria} · {ing.fecha}{ing.recurrente ? ' · 🔄' : ''}</div>
                   </div>
                   <span style={{ fontWeight: 700, color: 'var(--green)', flexShrink: 0 }}>+{fmtEur(ing.importe)}</span>
-                  <button className="btn-icon" style={{ padding: 5, flexShrink: 0 }} title="Editar" onClick={() => setEditItem(ing)}><Pencil size={13} /></button>
+                  <button className="btn-icon" style={{ padding: 5, flexShrink: 0 }} title="Editar" onClick={() => handleEdit(ing)}><Pencil size={13} /></button>
                   <button className="btn-icon" style={{ padding: 5, flexShrink: 0 }} title="Eliminar" onClick={() => handleDelete(ing)}><Trash2 size={13} /></button>
                 </div>
               ))
@@ -102,7 +113,12 @@ function PanelGastos({ gastos, titulo, onClose }: { gastos: Gasto[]; titulo: str
   const [showAdd, setShowAdd] = useState(false);
 
   const handleDelete = (gas: Gasto) => {
+    if (gas.origen) { toast('Para gestionar este gasto ve a la sección Inmobiliario', { icon: '🏠' }); return; }
     if (window.confirm(`¿Eliminar "${gas.nombre}"?`)) removeGasto(gas.id);
+  };
+  const handleEdit = (gas: Gasto) => {
+    if (gas.origen) { toast('Para editar este gasto ve a la sección Inmobiliario', { icon: '🏠' }); return; }
+    setEditItem(gas);
   };
 
   return (
@@ -145,11 +161,14 @@ function PanelGastos({ gastos, titulo, onClose }: { gastos: Gasto[]; titulo: str
                 <div key={gas.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', background: 'var(--bg3)', borderRadius: 8 }}>
                   <span style={{ fontSize: 20, flexShrink: 0 }}>{CAT_ICONS[gas.categoria] ?? '💸'}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{gas.nombre}</div>
+                    <div style={{ fontSize: 14, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {gas.nombre}
+                      {gas.origen === 'inmobiliario' && <span style={{ fontSize: 9, background: 'rgba(59,130,246,0.15)', color: 'var(--blue)', borderRadius: 4, padding: '1px 4px', fontWeight: 600, flexShrink: 0 }}>🏠 Auto</span>}
+                    </div>
                     <div style={{ fontSize: 12, color: 'var(--text2)' }}>{gas.categoria} · {gas.fecha}{gas.recurrente ? ' · 🔄' : ''}</div>
                   </div>
                   <span style={{ fontWeight: 700, color: 'var(--red)', flexShrink: 0 }}>-{fmtEur(gas.importe)}</span>
-                  <button className="btn-icon" style={{ padding: 5, flexShrink: 0 }} title="Editar" onClick={() => setEditItem(gas)}><Pencil size={13} /></button>
+                  <button className="btn-icon" style={{ padding: 5, flexShrink: 0 }} title="Editar" onClick={() => handleEdit(gas)}><Pencil size={13} /></button>
                   <button className="btn-icon" style={{ padding: 5, flexShrink: 0 }} title="Eliminar" onClick={() => handleDelete(gas)}><Trash2 size={13} /></button>
                 </div>
               ))
@@ -786,6 +805,7 @@ export default function Inicio() {
   const { snapshots, addSnapshot } = useHistoricoStore();
   const { deudas } = useDeudaStore();
   const { inmuebles } = useInmuebleStore();
+  const { facturas } = useFacturasStore();
   const precios = useMercadoStore((s) => s.precios);
 
   const [showModalIngreso, setShowModalIngreso] = useState(false);
@@ -803,6 +823,7 @@ export default function Inicio() {
   // Net worth
   const saldoCuentas = cuentas.reduce((sum, c) => sum + toEur(c.saldo, c.divisa), 0);
   const valorInversiones = posiciones.reduce((sum, p) => {
+    if (p.tipo === 'Fondo Indexado') return sum + (p.vl ?? p.precioMedio) * p.acciones;
     const cached = precios[p.simbolo];
     const precioActual = cached ? cached.precio : (MOCK_TICKERS.find(t => t.symbol === p.simbolo)?.price || p.precioMedio);
     return sum + toEur(precioActual * p.acciones, p.divisa);
@@ -877,8 +898,52 @@ export default function Inicio() {
   const tituloMes = `${MESES_ES[now.getMonth()]} ${now.getFullYear()}`;
   const ingresosMes = ingresos.filter(i => i.fecha.startsWith(mesActual));
   const gastosMes = gastos.filter(g => g.fecha.startsWith(mesActual));
-  const ingresosTotal = ingresosMes.reduce((s, i) => s + i.importe, 0);
-  const gastosTotal = gastosMes.reduce((s, g) => s + g.importe, 0);
+
+  // Synthetic ingresos from inmuebles con renta (same logic as Finanzas.tsx)
+  const syntheticIngInm: Ingreso[] = inmuebles
+    .filter(inm => inm.generaRenta && inm.rentaMensualBruta > 0)
+    .map(inm => ({
+      id: `inm-${inm.id}`,
+      nombre: `Alquiler — ${inm.nombre}`,
+      categoria: 'Alquiler' as const,
+      importe: inm.rentaMensualBruta,
+      fecha: `${mesActual}-01`,
+      recurrente: true,
+      origen: 'inmobiliario' as const,
+      origenId: inm.id,
+    }));
+
+  const syntheticIngFac: Ingreso[] = facturas
+    .filter(f => f.estado === 'Cobrada' && f.fechaEmision.startsWith(mesActual))
+    .map(f => ({
+      id: `fac-${f.id}`,
+      nombre: `Factura ${f.numero}`,
+      categoria: 'Autónomo' as const,
+      importe: f.total,
+      fecha: f.fechaEmision,
+      recurrente: false,
+      origen: 'factura' as const,
+      origenId: f.id,
+    }));
+
+  const syntheticGasInm: Gasto[] = inmuebles
+    .filter(inm => inm.generaRenta)
+    .map(inm => ({
+      id: `inm-gas-${inm.id}`,
+      nombre: `Gastos — ${inm.nombre}`,
+      categoria: 'Vivienda' as const,
+      importe: inm.gastosIbiMes + inm.gastosComunidad + inm.gastosSeguro + inm.gastosMantenimiento + inm.gastosOtros,
+      fecha: `${mesActual}-01`,
+      recurrente: true,
+      origen: 'inmobiliario' as const,
+      origenId: inm.id,
+    }))
+    .filter(g => g.importe > 0);
+
+  const allIngMes = [...ingresosMes, ...syntheticIngInm, ...syntheticIngFac];
+  const allGasMes = [...gastosMes, ...syntheticGasInm];
+  const ingresosTotal = allIngMes.reduce((s, i) => s + i.importe, 0);
+  const gastosTotal = allGasMes.reduce((s, g) => s + g.importe, 0);
   const ahorro = ingresosTotal - gastosTotal;
 
   const cardClickStyle: React.CSSProperties = { cursor: 'pointer', userSelect: 'none' };
@@ -991,7 +1056,7 @@ export default function Inicio() {
             <ChevronRight size={14} color="var(--text2)" />
           </div>
           <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--green)' }}>{fmtEur(ingresosTotal)}</div>
-          <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 4 }}>{ingresosMes.length} entradas · ver detalle</div>
+          <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 4 }}>{allIngMes.length} entradas · ver detalle</div>
         </div>
         <div className="card card-hover" style={cardClickStyle} onClick={() => setPanel('gastos')}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
@@ -999,7 +1064,7 @@ export default function Inicio() {
             <ChevronRight size={14} color="var(--text2)" />
           </div>
           <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--red)' }}>{fmtEur(gastosTotal)}</div>
-          <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 4 }}>{gastosMes.length} entradas · ver detalle</div>
+          <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 4 }}>{allGasMes.length} entradas · ver detalle</div>
         </div>
         <div className="card card-hover" style={cardClickStyle} onClick={() => setPanel('ahorro')}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
@@ -1163,10 +1228,10 @@ export default function Inicio() {
 
       {/* Panels */}
       {panel === 'ingresos' && (
-        <PanelIngresos ingresos={ingresosMes} titulo={tituloMes} onClose={() => setPanel(null)} />
+        <PanelIngresos ingresos={allIngMes} titulo={tituloMes} onClose={() => setPanel(null)} />
       )}
       {panel === 'gastos' && (
-        <PanelGastos gastos={gastosMes} titulo={tituloMes} onClose={() => setPanel(null)} />
+        <PanelGastos gastos={allGasMes} titulo={tituloMes} onClose={() => setPanel(null)} />
       )}
       {panel === 'ahorro' && (
         <PanelAhorro ingresosTotal={ingresosTotal} gastosTotal={gastosTotal} titulo={tituloMes} onClose={() => setPanel(null)} />
