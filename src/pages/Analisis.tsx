@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import { useInversionesStore } from '../stores/useInversionesStore';
 import { useMercadoStore } from '../stores/useMercadoStore';
@@ -7,8 +8,10 @@ import { useInmuebleStore } from '../stores/useInmuebleStore';
 import { useDeudaStore } from '../stores/useDeudaStore';
 import { useConfigStore } from '../stores/useConfigStore';
 import { getQuote, MOCK_TICKERS } from '../services/alphaVantage';
+import { isCryptoSymbol } from '../services/coinGecko';
 import { getCompanyProfile, getKeyMetrics, getRatings, getPriceTarget, type CompanyProfile, type KeyMetrics, type Rating, type PriceTarget } from '../services/financialModelingPrep';
 import { fmtEur, toEur, USD_TO_EUR } from '../utils/format';
+import { calcScoreCartera } from '../utils/scoreCartera';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 type Badge = 'Comprar' | 'Mantener' | 'Vender';
@@ -67,6 +70,8 @@ function calcIRPF(ganancia: number): number {
 }
 
 export default function Analisis() {
+  const [searchParams] = useSearchParams();
+  const focusSymbol = searchParams.get('symbol') ?? '';
   const { posiciones } = useInversionesStore();
   const { precios, setPrice } = useMercadoStore();
   const { dividendos } = useDividendosStore();
@@ -77,21 +82,37 @@ export default function Analisis() {
   const [refreshing, setRefreshing] = useState(false);
   const [fmpData, setFmpData] = useState<Record<string, FMPData>>({});
   const [expandedFmp, setExpandedFmp] = useState<Record<string, boolean>>({});
+  const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  const getPrice = (simbolo: string, fallback: number): number => {
-    const cached = precios[simbolo];
-    const mock = MOCK_TICKERS.find(t => t.symbol === simbolo);
-    return cached?.precio ?? mock?.price ?? fallback ?? 0;
+  // Auto-expand and scroll to focused symbol
+  useEffect(() => {
+    if (!focusSymbol) return;
+    setExpandedFmp(prev => ({ ...prev, [focusSymbol]: true }));
+    setTimeout(() => {
+      const el = cardRefs.current[focusSymbol];
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 200);
+  }, [focusSymbol]);
+
+  // Price helper: fondos use VL, never Alpha Vantage
+  const getPriceOf = (p: typeof posiciones[0]): number => {
+    if (p.tipo === 'Fondo Indexado') return p.vl ?? p.precioMedio ?? 0;
+    const cached = precios[p.simbolo];
+    const mock = MOCK_TICKERS.find(t => t.symbol === p.simbolo);
+    return cached?.precio ?? mock?.price ?? p.precioMedio ?? 0;
   };
+
   const getChange = (simbolo: string): number => {
     const cached = precios[simbolo];
     const mock = MOCK_TICKERS.find(t => t.symbol === simbolo);
     return cached?.variacion ?? mock?.change ?? 0;
   };
 
+  // Refresh: skip fondos indexados and crypto handled elsewhere
   const refresh = async () => {
     setRefreshing(true);
-    await Promise.all(posiciones.map(async (p) => {
+    const tradeable = posiciones.filter(p => p.tipo !== 'Fondo Indexado' && !isCryptoSymbol(p.simbolo) && p.tipo !== 'Crypto');
+    await Promise.all(tradeable.map(async (p) => {
       const q = await getQuote(p.simbolo);
       if (q) setPrice(p.simbolo, q.price, q.change);
     }));
@@ -100,12 +121,12 @@ export default function Analisis() {
 
   useEffect(() => { refresh(); }, []);
 
-  // Load FMP data for each stock position (non-crypto)
+  // Load FMP data for tradeable positions only (not fondos, not crypto)
   useEffect(() => {
     if (!fmpKey) return;
-    const stockPositions = posiciones.filter(p => p.tipo !== 'Crypto');
+    const stockPositions = posiciones.filter(p => p.tipo !== 'Crypto' && p.tipo !== 'Fondo Indexado');
     stockPositions.forEach(async (p) => {
-      if (fmpData[p.simbolo]) return; // already loaded
+      if (fmpData[p.simbolo]) return;
       const [profile, metrics, rating, priceTarget] = await Promise.all([
         getCompanyProfile(p.simbolo),
         getKeyMetrics(p.simbolo),
@@ -116,16 +137,10 @@ export default function Analisis() {
     });
   }, [posiciones, fmpKey]);
 
-  // Score global
-  const scores = posiciones.map(p => {
-    const curr = getPrice(p.simbolo, p.precioMedio);
-    return ((curr - p.precioMedio) / p.precioMedio) * 100;
-  });
-  const portfolioScore = posiciones.length > 0
-    ? Math.min(100, Math.max(0, 50 + scores.reduce((a, b) => a + b, 0) / scores.length))
-    : 0;
-
-  const totalValor = posiciones.reduce((s, p) => s + toEur(getPrice(p.simbolo, p.precioMedio) * p.acciones, p.divisa), 0);
+  // Score: same logic as Inversiones
+  const totalValor = posiciones.reduce((s, p) => s + toEur(getPriceOf(p) * p.acciones, p.divisa), 0);
+  const scoreData = calcScoreCartera(posiciones, getPriceOf, totalValor);
+  const portfolioScore = scoreData.total;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -143,11 +158,11 @@ export default function Analisis() {
         <>
           {/* Portfolio score */}
           <div className="card" style={{ background: 'linear-gradient(135deg, #1e1e2e 0%, #161618 100%)', border: '1px solid #2a2a42' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <div>
                 <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 4 }}>Score de Cartera</div>
                 <div style={{ fontSize: 42, fontWeight: 800, color: portfolioScore >= 60 ? 'var(--green)' : portfolioScore >= 40 ? 'var(--amber)' : 'var(--red)' }}>
-                  {Number(portfolioScore ?? 0).toFixed(0)}<span style={{ fontSize: 20, color: 'var(--text2)' }}>/100</span>
+                  {portfolioScore}<span style={{ fontSize: 20, color: 'var(--text2)' }}>/100</span>
                 </div>
               </div>
               <button className="btn-icon" onClick={refresh}>
@@ -157,12 +172,30 @@ export default function Analisis() {
             <div className="progress-bar">
               <div className="progress-fill" style={{ width: `${portfolioScore}%`, background: portfolioScore >= 60 ? 'var(--green)' : portfolioScore >= 40 ? 'var(--amber)' : 'var(--red)' }} />
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 6 }}>
-              {portfolioScore >= 60 ? 'Cartera con buen rendimiento' : portfolioScore >= 40 ? 'Cartera con rendimiento moderado' : 'Cartera con rendimiento bajo'}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, marginTop: 12 }}>
+              {[
+                { label: 'Diversificación sector', v: scoreData.diversificacionSector, max: 30 },
+                { label: 'Tipos activo', v: scoreData.diversificacionTipo, max: 25 },
+                { label: 'Concentración', v: scoreData.concentracionMaxima, max: 20 },
+                { label: 'Calidad', v: scoreData.calidadFundamental, max: 15 },
+                { label: 'Liquidez', v: scoreData.liquidez, max: 10 },
+              ].map(f => {
+                const pct = f.v / f.max;
+                const col = pct >= 0.8 ? 'var(--green)' : pct >= 0.5 ? 'var(--amber)' : 'var(--red)';
+                return (
+                  <div key={f.label} style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '8px 10px' }}>
+                    <div style={{ fontSize: 10, color: 'var(--text2)', marginBottom: 4 }}>{f.label}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: col }}>{f.v}<span style={{ fontSize: 10, color: 'var(--text2)' }}>/{f.max}</span></div>
+                    <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 2, height: 3, marginTop: 4 }}>
+                      <div style={{ height: '100%', width: `${pct * 100}%`, background: col, borderRadius: 2 }} />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          {/* Company cards */}
+          {/* Position cards */}
           {posiciones.length === 0 ? (
             <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text2)' }}>
               No tienes posiciones. Añade activos en la sección de Inversiones.
@@ -170,93 +203,162 @@ export default function Analisis() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {posiciones.map((p) => {
-                const precio = getPrice(p.simbolo, p.precioMedio) || 0;
-                const cambio = getChange(p.simbolo) || 0;
+                const esFondo = p.tipo === 'Fondo Indexado';
+                const precio = getPriceOf(p) || 0;
+                const cambio = esFondo ? 0 : (getChange(p.simbolo) || 0);
                 const precioMedio = p.precioMedio || 0;
                 const pnlPct = precioMedio > 0 ? ((precio - precioMedio) / precioMedio) * 100 : 0;
-                const pnlEur = toEur((precio - precioMedio) * (p.acciones || 0), p.divisa) || 0;
+                // For fondos: PnL = participaciones × VL - participaciones × precio compra (all in EUR)
+                const pnlEur = esFondo
+                  ? p.acciones * precio - p.acciones * precioMedio
+                  : toEur((precio - precioMedio) * (p.acciones || 0), p.divisa);
                 const fmp = fmpData[p.simbolo];
                 const badge = getBadge(pnlPct, fmp?.rating);
-                const peso = totalValor > 0 ? (toEur(precio * (p.acciones || 0), p.divisa) / totalValor) * 100 : 0;
+                const valorPos = toEur(precio * (p.acciones || 0), p.divisa);
+                const peso = totalValor > 0 ? (valorPos / totalValor) * 100 : 0;
                 const isExpanded = expandedFmp[p.simbolo];
-
-                const metrics = [
-                  { label: 'Precio actual', value: `$${Number(precio ?? 0).toFixed(2)}` },
-                  { label: 'Precio compra', value: `$${Number(precioMedio ?? 0).toFixed(2)}` },
-                  { label: 'Variación hoy', value: `${cambio >= 0 ? '+' : ''}${Number(cambio ?? 0).toFixed(2)}%`, color: cambio >= 0 ? 'var(--green)' : 'var(--red)' },
-                  { label: 'P&L total', value: `${pnlEur >= 0 ? '+' : ''}${fmtEur(pnlEur)}`, color: pnlEur >= 0 ? 'var(--green)' : 'var(--red)' },
-                  { label: 'P&L %', value: `${pnlPct >= 0 ? '+' : ''}${Number(pnlPct ?? 0).toFixed(2)}%`, color: pnlPct >= 0 ? 'var(--green)' : 'var(--red)' },
-                  { label: 'Peso cartera', value: `${Number(peso ?? 0).toFixed(1)}%` },
-                ];
+                const isFocused = focusSymbol === p.simbolo || focusSymbol === p.isin;
 
                 return (
-                  <div key={p.id} className="card">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        {fmp?.profile?.image ? (
-                          <img src={fmp.profile.image} alt={p.simbolo} style={{ width: 44, height: 44, borderRadius: 10, objectFit: 'contain', background: 'white', padding: 4 }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                        ) : (
-                          <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14, color: 'var(--blue)' }}>
-                            {p.simbolo.slice(0, 2)}
-                          </div>
-                        )}
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: 16 }}>{p.simbolo}</div>
-                          <div style={{ fontSize: 12, color: 'var(--text2)' }}>
-                            {fmp?.profile?.sector ? `${fmp.profile.sector} · ` : ''}{p.nombre}
-                          </div>
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        {fmp?.priceTarget?.targetConsensus && (
-                          <span style={{ fontSize: 12, color: 'var(--text2)', background: 'var(--bg3)', padding: '3px 8px', borderRadius: 6 }}>
-                            🎯 ${fmp.priceTarget.targetConsensus.toFixed(0)}
-                          </span>
-                        )}
-                        <span className={`badge-${badge === 'Comprar' ? 'buy' : badge === 'Vender' ? 'sell' : 'hold'}`}>
-                          {badge}
-                        </span>
-                      </div>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-                      {metrics.map((m) => (
-                        <div key={m.label} style={{ background: 'var(--bg3)', borderRadius: 8, padding: '8px 12px' }}>
-                          <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 3 }}>{m.label}</div>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: m.color || 'var(--text)' }}>{m.value}</div>
-                        </div>
-                      ))}
-                    </div>
-                    {/* FMP fundamentals */}
-                    {fmp?.metrics && (
+                  <div
+                    key={p.id}
+                    ref={el => { cardRefs.current[p.simbolo] = el; if (p.isin) cardRefs.current[p.isin] = el; }}
+                    className="card"
+                    style={isFocused ? { border: '2px solid var(--blue)', boxShadow: '0 0 0 3px rgba(59,130,246,0.15)' } : {}}
+                  >
+                    {esFondo ? (
+                      /* ── FONDO INDEXADO CARD ── */
                       <>
-                        <button onClick={() => setExpandedFmp(prev => ({ ...prev, [p.simbolo]: !isExpanded }))}
-                          style={{ marginTop: 12, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text2)', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4, padding: '4px 0' }}>
-                          {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                          {isExpanded ? 'Ocultar' : 'Ver'} fundamentales
-                        </button>
-                        {isExpanded && (
-                          <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                            {[
-                              { label: 'PER', value: fmp.metrics.peRatioTTM ? fmp.metrics.peRatioTTM.toFixed(1) + 'x' : 'N/A' },
-                              { label: 'P/B', value: fmp.metrics.pbRatioTTM ? fmp.metrics.pbRatioTTM.toFixed(2) + 'x' : 'N/A' },
-                              { label: 'ROE', value: fmp.metrics.roeTTM ? (fmp.metrics.roeTTM * 100).toFixed(1) + '%' : 'N/A', color: (fmp.metrics.roeTTM ?? 0) > 0.15 ? 'var(--green)' : undefined },
-                              { label: 'Margen Neto', value: fmp.metrics.netProfitMarginTTM ? (fmp.metrics.netProfitMarginTTM * 100).toFixed(1) + '%' : 'N/A' },
-                              { label: 'Div Yield', value: fmp.metrics.dividendYieldTTM ? (fmp.metrics.dividendYieldTTM * 100).toFixed(2) + '%' : '—', color: (fmp.metrics.dividendYieldTTM ?? 0) > 0.02 ? 'var(--green)' : undefined },
-                              { label: 'Beta', value: fmp.profile?.beta ? fmp.profile.beta.toFixed(2) : 'N/A', color: (fmp.profile?.beta ?? 1) > 1.5 ? 'var(--amber)' : undefined },
-                            ].map(m => (
-                              <div key={m.label} style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.15)', borderRadius: 8, padding: '7px 10px' }}>
-                                <div style={{ fontSize: 10, color: 'var(--text2)', marginBottom: 2 }}>{m.label}</div>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: m.color || 'var(--text)' }}>{m.value}</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, color: '#a855f7' }}>
+                              {p.nombre.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: 700, fontSize: 15 }}>{p.nombre.slice(0, 40)}</div>
+                              <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>
+                                {p.gestora ? `${p.gestora} · ` : ''}Fondo Indexado{p.isin ? ` · ${p.isin}` : ''}
                               </div>
-                            ))}
+                            </div>
+                          </div>
+                          <span style={{ fontSize: 11, background: 'rgba(168,85,247,0.15)', color: '#a855f7', padding: '3px 8px', borderRadius: 6, fontWeight: 600 }}>
+                            VL manual
+                          </span>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 10 }}>
+                          {[
+                            { label: 'VL actual (€)', value: precio > 0 ? `€${precio.toFixed(4)}` : 'Sin actualizar', note: p.vlFecha ? `Fecha: ${p.vlFecha}` : undefined },
+                            { label: 'Precio compra (€)', value: `€${precioMedio.toFixed(4)}` },
+                            { label: 'Participaciones', value: p.acciones.toString() },
+                            { label: 'P&L total', value: `${pnlEur >= 0 ? '+' : ''}${fmtEur(pnlEur)}`, color: pnlEur >= 0 ? 'var(--green)' : 'var(--red)' },
+                            { label: 'P&L %', value: `${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`, color: pnlPct >= 0 ? 'var(--green)' : 'var(--red)' },
+                            { label: 'Peso cartera', value: `${peso.toFixed(1)}%` },
+                          ].map((m) => (
+                            <div key={m.label} style={{ background: 'var(--bg3)', borderRadius: 8, padding: '8px 12px' }}>
+                              <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 3 }}>{m.label}</div>
+                              <div style={{ fontSize: 14, fontWeight: 600, color: (m as { color?: string }).color || 'var(--text)' }}>{m.value}</div>
+                              {(m as { note?: string }).note && <div style={{ fontSize: 10, color: 'var(--text2)', marginTop: 1 }}>{(m as { note?: string }).note}</div>}
+                            </div>
+                          ))}
+                        </div>
+                        {/* Fondo details */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+                          {[
+                            { label: 'Índice replicado', value: p.nombre.includes('S&P') || p.nombre.includes('SP') ? 'S&P 500' : p.nombre.includes('World') ? 'MSCI World' : p.nombre.includes('Nasdaq') ? 'Nasdaq 100' : p.nombre.includes('Euro') ? 'Euro Stoxx' : 'Ver nombre del fondo' },
+                            { label: 'TER', value: p.ter != null ? `${p.ter}%` : 'No especificado' },
+                            { label: 'Gestora', value: p.gestora ?? 'No especificada' },
+                            { label: 'Valor total posición', value: fmtEur(valorPos) },
+                          ].map(m => (
+                            <div key={m.label} style={{ background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.12)', borderRadius: 8, padding: '7px 10px' }}>
+                              <div style={{ fontSize: 10, color: 'var(--text2)', marginBottom: 2 }}>{m.label}</div>
+                              <div style={{ fontSize: 13, fontWeight: 600 }}>{m.value}</div>
+                            </div>
+                          ))}
+                        </div>
+                        {precio === 0 && (
+                          <div style={{ marginTop: 10, fontSize: 12, color: 'var(--amber)', background: 'rgba(245,158,11,0.08)', borderRadius: 6, padding: '8px 12px' }}>
+                            ⚠️ Sin VL actualizado. Ve a Inversiones → actualiza el VL manualmente con el botón "VL".
                           </div>
                         )}
                       </>
-                    )}
-                    {!fmpKey && (
-                      <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text2)', opacity: .7 }}>
-                        Conecta Financial Modeling Prep en Ajustes → APIs para ver métricas fundamentales reales
-                      </div>
+                    ) : (
+                      /* ── EMPRESA / ETF / CRYPTO / MATERIA PRIMA CARD ── */
+                      <>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            {fmp?.profile?.image ? (
+                              <img src={fmp.profile.image} alt={p.simbolo} style={{ width: 44, height: 44, borderRadius: 10, objectFit: 'contain', background: 'white', padding: 4 }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                            ) : (
+                              <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14, color: 'var(--blue)' }}>
+                                {p.simbolo.slice(0, 2)}
+                              </div>
+                            )}
+                            <div>
+                              <div style={{ fontWeight: 700, fontSize: 16 }}>{p.simbolo}</div>
+                              <div style={{ fontSize: 12, color: 'var(--text2)' }}>
+                                {fmp?.profile?.sector ? `${fmp.profile.sector} · ` : ''}{p.nombre}
+                              </div>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {fmp?.priceTarget?.targetConsensus && (
+                              <span style={{ fontSize: 12, color: 'var(--text2)', background: 'var(--bg3)', padding: '3px 8px', borderRadius: 6 }}>
+                                🎯 ${fmp.priceTarget.targetConsensus.toFixed(0)}
+                              </span>
+                            )}
+                            <span className={`badge-${badge === 'Comprar' ? 'buy' : badge === 'Vender' ? 'sell' : 'hold'}`}>
+                              {badge}
+                            </span>
+                          </div>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                          {[
+                            { label: 'Precio actual', value: `$${Number(precio ?? 0).toFixed(2)}` },
+                            { label: 'Precio compra', value: `$${Number(precioMedio ?? 0).toFixed(2)}` },
+                            { label: 'Variación hoy', value: `${cambio >= 0 ? '+' : ''}${Number(cambio ?? 0).toFixed(2)}%`, color: cambio >= 0 ? 'var(--green)' : 'var(--red)' },
+                            { label: 'P&L total', value: `${pnlEur >= 0 ? '+' : ''}${fmtEur(pnlEur)}`, color: pnlEur >= 0 ? 'var(--green)' : 'var(--red)' },
+                            { label: 'P&L %', value: `${pnlPct >= 0 ? '+' : ''}${Number(pnlPct ?? 0).toFixed(2)}%`, color: pnlPct >= 0 ? 'var(--green)' : 'var(--red)' },
+                            { label: 'Peso cartera', value: `${Number(peso ?? 0).toFixed(1)}%` },
+                          ].map((m) => (
+                            <div key={m.label} style={{ background: 'var(--bg3)', borderRadius: 8, padding: '8px 12px' }}>
+                              <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 3 }}>{m.label}</div>
+                              <div style={{ fontSize: 14, fontWeight: 600, color: (m as { color?: string }).color || 'var(--text)' }}>{m.value}</div>
+                            </div>
+                          ))}
+                        </div>
+                        {/* FMP fundamentals */}
+                        {fmp?.metrics && (
+                          <>
+                            <button onClick={() => setExpandedFmp(prev => ({ ...prev, [p.simbolo]: !isExpanded }))}
+                              style={{ marginTop: 12, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text2)', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4, padding: '4px 0' }}>
+                              {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                              {isExpanded ? 'Ocultar' : 'Ver'} fundamentales
+                            </button>
+                            {isExpanded && (
+                              <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                                {[
+                                  { label: 'PER', value: fmp.metrics.peRatioTTM ? fmp.metrics.peRatioTTM.toFixed(1) + 'x' : 'N/A' },
+                                  { label: 'P/B', value: fmp.metrics.pbRatioTTM ? fmp.metrics.pbRatioTTM.toFixed(2) + 'x' : 'N/A' },
+                                  { label: 'ROE', value: fmp.metrics.roeTTM ? (fmp.metrics.roeTTM * 100).toFixed(1) + '%' : 'N/A', color: (fmp.metrics.roeTTM ?? 0) > 0.15 ? 'var(--green)' : undefined },
+                                  { label: 'Margen Neto', value: fmp.metrics.netProfitMarginTTM ? (fmp.metrics.netProfitMarginTTM * 100).toFixed(1) + '%' : 'N/A' },
+                                  { label: 'Div Yield', value: fmp.metrics.dividendYieldTTM ? (fmp.metrics.dividendYieldTTM * 100).toFixed(2) + '%' : '—', color: (fmp.metrics.dividendYieldTTM ?? 0) > 0.02 ? 'var(--green)' : undefined },
+                                  { label: 'Beta', value: fmp.profile?.beta ? fmp.profile.beta.toFixed(2) : 'N/A', color: (fmp.profile?.beta ?? 1) > 1.5 ? 'var(--amber)' : undefined },
+                                ].map(m => (
+                                  <div key={m.label} style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.15)', borderRadius: 8, padding: '7px 10px' }}>
+                                    <div style={{ fontSize: 10, color: 'var(--text2)', marginBottom: 2 }}>{m.label}</div>
+                                    <div style={{ fontSize: 13, fontWeight: 700, color: m.color || 'var(--text)' }}>{m.value}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        )}
+                        {!fmpKey && (
+                          <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text2)', opacity: .7 }}>
+                            Conecta Financial Modeling Prep en Ajustes → APIs para ver métricas fundamentales reales
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 );
@@ -389,10 +491,12 @@ export default function Analisis() {
       )}
       {/* === FISCALIDAD === */}
       {tab === 'fiscalidad' && (() => {
-        // P&L calculations per position
+        // P&L calculations per position (using correct price for fondos)
         const posicionesConPnl = posiciones.map(p => {
-          const precio = (precios[p.simbolo]?.precio ?? MOCK_TICKERS.find(t => t.symbol === p.simbolo)?.price ?? p.precioMedio) || 0;
-          const pnlBruto = toEur((precio - p.precioMedio) * p.acciones, p.divisa);
+          const precio = getPriceOf(p) || 0;
+          const pnlBruto = p.tipo === 'Fondo Indexado'
+            ? p.acciones * precio - p.acciones * p.precioMedio
+            : toEur((precio - p.precioMedio) * p.acciones, p.divisa);
           const impuesto = calcIRPF(Math.max(pnlBruto, 0));
           return { ...p, precio, pnlBruto, impuesto, pnlNeto: pnlBruto - impuesto };
         });

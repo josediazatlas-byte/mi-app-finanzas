@@ -224,11 +224,16 @@ export default function ModalAddPosicion({ onClose }: Props) {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                 <div>
                   <label className="label">Fecha de compra (opcional)</label>
                   <input className="input" type="date" value={form.fechaCompra ?? ''} onChange={(e) => setForm({ ...form, fechaCompra: e.target.value })} />
                   <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 3 }}>Para calcular rentabilidad anualizada</div>
+                </div>
+                <div>
+                  <label className="label">TER % (opcional)</label>
+                  <input className="input" type="number" min="0" max="5" step="0.01" value={form.ter ?? ''} onChange={(e) => setForm({ ...form, ter: parseFloat(e.target.value) || undefined })} placeholder="Ej: 0.07" />
+                  <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 3 }}>Total Expense Ratio anual</div>
                 </div>
                 <div>
                   <label className="label">Notas (opcional)</label>

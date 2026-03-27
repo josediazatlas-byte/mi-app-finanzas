@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Plus, RefreshCw, TrendingUp, TrendingDown, Pencil, X, Trash2, Bot } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, RefreshCw, TrendingUp, TrendingDown, Pencil, X, Trash2, Bot, BarChart2 } from 'lucide-react';
 import { useInversionesStore } from '../stores/useInversionesStore';
 import type { Posicion } from '../stores/useInversionesStore';
 import { useDividendosStore } from '../stores/useDividendosStore';
@@ -11,6 +12,8 @@ import { getQuote, MOCK_TICKERS } from '../services/alphaVantage';
 import { cgGetPrices, symbolToId, isCryptoSymbol } from '../services/coinGecko';
 import { callClaudeAPI, buildFinancialContext, SYSTEM_PROMPT } from '../utils/aiContext';
 import { fmtEur, toEur, USD_TO_EUR } from '../utils/format';
+import { calcScoreCartera } from '../utils/scoreCartera';
+import type { ScoreBreakdown } from '../utils/scoreCartera';
 import ModalAddPosicion from '../components/ModalAddPosicion';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, RadarChart, Radar, PolarGrid, PolarAngleAxis } from 'recharts';
 import { getRatings, getPriceTarget, getStockNews, getFearAndGreed } from '../services/financialModelingPrep';
@@ -200,32 +203,7 @@ function ModalActualizarVL({ posicion, onClose }: { posicion: Posicion; onClose:
 }
 
 // ─── Score helpers ────────────────────────────────────────────────────────────
-
-interface ScoreBreakdown {
-  total: number;
-  diversificacionSector: number;  // 30 pts
-  diversificacionTipo: number;    // 25 pts
-  concentracionMaxima: number;    // 20 pts
-  calidadFundamental: number;     // 15 pts
-  liquidez: number;               // 10 pts
-}
-
-function calcScoreCartera(posiciones: Posicion[], getPriceOf: (p: Posicion) => number, valorTotal: number): ScoreBreakdown {
-  if (posiciones.length === 0) return { total: 0, diversificacionSector: 0, diversificacionTipo: 0, concentracionMaxima: 0, calidadFundamental: 0, liquidez: 0 };
-  const n = posiciones.length;
-  const diversificacionSector = n === 1 ? 5 : n === 2 ? 10 : n <= 4 ? 18 : n <= 7 ? 25 : 30;
-  const tipos = new Set(posiciones.map(p => p.tipo)).size;
-  const diversificacionTipo = tipos === 1 ? 5 : tipos === 2 ? 12 : tipos === 3 ? 18 : tipos === 4 ? 22 : 25;
-  const maxPeso = Math.max(...posiciones.map(p => valorTotal > 0 ? (toEur(getPriceOf(p) * p.acciones, p.divisa) / valorTotal) * 100 : 0), 0);
-  const concentracionMaxima = maxPeso > 60 ? 2 : maxPeso > 40 ? 8 : maxPeso > 25 ? 14 : maxPeso > 15 ? 18 : 20;
-  const avgPnl = posiciones.reduce((s, p) => s + (p.precioMedio > 0 ? ((getPriceOf(p) - p.precioMedio) / p.precioMedio) * 100 : 0), 0) / posiciones.length;
-  const calidadFundamental = avgPnl < -15 ? 3 : avgPnl < -5 ? 7 : avgPnl < 5 ? 11 : 15;
-  const hasETFOrFondo = posiciones.some(p => p.tipo === 'ETF' || p.tipo === 'Fondo Indexado');
-  const hasEmpresa = posiciones.some(p => p.tipo === 'Empresa');
-  const cryptoPct = valorTotal > 0 ? posiciones.filter(p => p.tipo === 'Crypto').reduce((s, p) => s + toEur(getPriceOf(p) * p.acciones, p.divisa), 0) / valorTotal * 100 : 0;
-  const liquidez = Math.min(10, (hasETFOrFondo ? 4 : 0) + (hasEmpresa ? 3 : 0) + (cryptoPct < 30 ? 3 : 0));
-  return { total: Math.round(diversificacionSector + diversificacionTipo + concentracionMaxima + calidadFundamental + liquidez), diversificacionSector, diversificacionTipo, concentracionMaxima, calidadFundamental, liquidez };
-}
+// calcScoreCartera and ScoreBreakdown imported from ../utils/scoreCartera
 
 function getRecomendacion(pnlPct: number, peso: number): 'COMPRAR' | 'MANTENER' | 'VENDER' {
   if (pnlPct > 25 || peso > 33) return 'VENDER';
@@ -684,10 +662,11 @@ function ModalRecomendacion({ posicion, peso, pnlPct, onClose }: { posicion: Pos
 }
 
 export default function Inversiones() {
+  const navigate = useNavigate();
   const { posiciones, removePosicion, pesosObjetivo, updatePesoObjetivo } = useInversionesStore();
   const { dividendos, removeDividendo } = useDividendosStore();
   const { precios, setPrice } = useMercadoStore();
-  const [tab, setTab] = useState<'cartera' | 'seguimiento' | 'rebalanceo' | 'dividendos'>('cartera');
+  const [tab, setTab] = useState<'cartera' | 'seguimiento' | 'rebalanceo' | 'dividendos' | 'analisis'>('cartera');
   const [subTab, setSubTab] = useState<string>('Empresa');
   const { anthropicKey } = useConfigStore();
   const [showModal, setShowModal] = useState(false);
@@ -830,9 +809,9 @@ export default function Inversiones() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, background: 'var(--bg2)', padding: 4, borderRadius: 10, border: '1px solid var(--border)' }}>
-        {(['cartera', 'seguimiento', 'rebalanceo', 'dividendos'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13, background: tab === t ? 'var(--blue)' : 'none', color: tab === t ? 'white' : 'var(--text2)', transition: 'all .2s', textTransform: 'capitalize' }}>
-            {t.charAt(0).toUpperCase() + t.slice(1)}
+        {(['cartera', 'seguimiento', 'rebalanceo', 'dividendos', 'analisis'] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13, background: tab === t ? 'var(--blue)' : 'none', color: tab === t ? 'white' : 'var(--text2)', transition: 'all .2s' }}>
+            {t === 'analisis' ? 'Análisis' : t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
       </div>
@@ -994,6 +973,9 @@ export default function Inversiones() {
                       </button>
                       <button className="btn-icon" style={{ padding: '4px 7px', fontSize: 10, fontWeight: 700, color: 'var(--blue)' }} title="Ver recomendación" onClick={() => setRecModal({ posicion: p, peso, pnlPct: pnlPosP })}>
                         Rec
+                      </button>
+                      <button className="btn-icon" style={{ padding: 6 }} title="Ver análisis detallado" onClick={() => navigate(`/analisis?symbol=${encodeURIComponent(p.simbolo)}`)}>
+                        <BarChart2 size={13} />
                       </button>
                       <button className="btn-icon" style={{ padding: 6 }} title="Editar" onClick={() => setEditPosicion(p)}>
                         <Pencil size={13} />
@@ -1280,6 +1262,60 @@ export default function Inversiones() {
           </>
         );
       })()}
+
+      {/* === ANÁLISIS RÁPIDO === */}
+      {tab === 'analisis' && (
+        <>
+          <div className="card" style={{ background: 'linear-gradient(135deg, #1e1e2e 0%, #161618 100%)', border: '1px solid #2a2a42' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 4 }}>Score de Cartera</div>
+                <div style={{ fontSize: 36, fontWeight: 800, color: avgScore >= 60 ? 'var(--green)' : avgScore >= 40 ? 'var(--amber)' : 'var(--red)' }}>
+                  {avgScore}<span style={{ fontSize: 18, color: 'var(--text2)' }}>/100</span>
+                </div>
+              </div>
+              <button className="btn-secondary" style={{ gap: 6 }} onClick={() => navigate('/analisis')}>
+                <BarChart2 size={14} /> Análisis completo
+              </button>
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {posiciones.length === 0 ? (
+              <div className="card" style={{ textAlign: 'center', padding: 32, color: 'var(--text2)' }}>No hay posiciones</div>
+            ) : posiciones.map((p, i) => {
+              const precio = getPrice(p) || 0;
+              const valorPos = toEur(precio * p.acciones, p.divisa);
+              const pnlPosP = p.precioMedio > 0 ? ((precio - p.precioMedio) / p.precioMedio) * 100 : 0;
+              const peso = valorTotal > 0 ? (valorPos / valorTotal) * 100 : 0;
+              const rec = getRecomendacion(pnlPosP, peso);
+              const recColor = rec === 'COMPRAR' ? 'var(--green)' : rec === 'VENDER' ? 'var(--amber)' : 'var(--blue)';
+              return (
+                <div key={p.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px' }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 8, background: `${COLORS[i % COLORS.length]}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12, color: COLORS[i % COLORS.length], flexShrink: 0 }}>
+                    {p.tipo === 'Fondo Indexado' ? p.nombre.slice(0, 2).toUpperCase() : p.simbolo.slice(0, 2)}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700 }}>{p.tipo === 'Fondo Indexado' ? p.nombre.slice(0, 30) : p.simbolo}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text2)' }}>{p.tipo} · {peso.toFixed(1)}% cartera</div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: 600, color: pnlPosP >= 0 ? 'var(--green)' : 'var(--red)', fontSize: 14 }}>
+                      {pnlPosP >= 0 ? '+' : ''}{pnlPosP.toFixed(1)}%
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text2)' }}>{fmtEur(valorPos)}</div>
+                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: recColor, minWidth: 70, textAlign: 'center', background: `${recColor}18`, border: `1px solid ${recColor}44`, borderRadius: 6, padding: '3px 8px' }}>
+                    {rec}
+                  </div>
+                  <button className="btn-icon" style={{ padding: 6 }} title="Análisis detallado" onClick={() => navigate(`/analisis?symbol=${encodeURIComponent(p.simbolo)}`)}>
+                    <BarChart2 size={13} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
 
       {showModal && <ModalAddPosicion onClose={() => setShowModal(false)} />}
       {vlModal && <ModalActualizarVL posicion={vlModal} onClose={() => setVlModal(null)} />}

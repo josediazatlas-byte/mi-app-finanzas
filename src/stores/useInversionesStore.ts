@@ -16,6 +16,7 @@ export interface Posicion {
   vl?: number;
   vlFecha?: string;
   fechaCompra?: string;
+  ter?: number;
 }
 
 export interface PesoObjetivo {
