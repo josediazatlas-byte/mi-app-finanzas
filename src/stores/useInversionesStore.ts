@@ -5,11 +5,17 @@ export interface Posicion {
   id: string;
   simbolo: string;
   nombre: string;
-  tipo: 'Empresa' | 'ETF' | 'Materia Prima' | 'Crypto';
+  tipo: 'Empresa' | 'ETF' | 'Materia Prima' | 'Crypto' | 'Fondo Indexado';
   acciones: number;
   precioMedio: number;
   divisa: 'USD' | 'EUR' | 'GBP';
   notas?: string;
+  // Fondos Indexados
+  isin?: string;
+  gestora?: string;
+  vl?: number;
+  vlFecha?: string;
+  fechaCompra?: string;
 }
 
 export interface PesoObjetivo {

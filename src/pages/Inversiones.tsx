@@ -14,7 +14,7 @@ import { fmtEur, toEur, USD_TO_EUR } from '../utils/format';
 import ModalAddPosicion from '../components/ModalAddPosicion';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 
-const TIPOS = ['Empresa', 'ETF', 'Materia Prima', 'Crypto'] as const;
+const TIPOS = ['Empresa', 'ETF', 'Materia Prima', 'Crypto', 'Fondo Indexado'] as const;
 const COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#a78bfa', '#ef4444', '#06b6d4', '#ec4899', '#84cc16'];
 
 function ModalEditPosicion({ posicion, onClose }: { posicion: Posicion; onClose: () => void }) {
@@ -132,6 +132,71 @@ function ModalDividendo({ dividendo, posiciones, onClose }: { dividendo?: Divide
   );
 }
 
+function ModalActualizarVL({ posicion, onClose }: { posicion: Posicion; onClose: () => void }) {
+  const { updatePosicion } = useInversionesStore();
+  const [vl, setVl] = useState(posicion.vl ?? posicion.precioMedio);
+  const [vlFecha, setVlFecha] = useState(posicion.vlFecha ?? new Date().toISOString().slice(0, 10));
+
+  const handleSubmit = () => {
+    if (vl <= 0) { toast.error('El VL debe ser mayor que 0'); return; }
+    updatePosicion(posicion.id, { vl, vlFecha });
+    toast.success('Valor liquidativo actualizado');
+    onClose();
+  };
+
+  const pnlPct = posicion.precioMedio > 0 ? ((vl - posicion.precioMedio) / posicion.precioMedio) * 100 : 0;
+  const totalInvertido = posicion.acciones * posicion.precioMedio;
+  const valorActual = posicion.acciones * vl;
+  const pnlEur = valorActual - totalInvertido;
+
+  return (
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 420 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div>
+            <h2 style={{ fontSize: 18, fontWeight: 700 }}>Actualizar VL</h2>
+            <div style={{ fontSize: 13, color: 'var(--text2)', marginTop: 2 }}>{posicion.nombre}</div>
+          </div>
+          <button className="btn-icon" onClick={onClose}><X size={16} /></button>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label className="label">Valor liquidativo (€)</label>
+              <input className="input" type="number" min="0" step="0.0001" value={vl || ''} onChange={(e) => setVl(parseFloat(e.target.value) || 0)} autoFocus />
+            </div>
+            <div>
+              <label className="label">Fecha del VL</label>
+              <input className="input" type="date" value={vlFecha} onChange={(e) => setVlFecha(e.target.value)} />
+            </div>
+          </div>
+          <div style={{ background: 'var(--bg3)', borderRadius: 8, padding: '12px 14px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 2 }}>Invertido</div>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>{fmtEur(totalInvertido)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 2 }}>Valor actual</div>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>{fmtEur(valorActual)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 2 }}>P&L</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: pnlEur >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                {pnlEur >= 0 ? '+' : ''}{fmtEur(pnlEur)}<br />
+                <span style={{ fontSize: 11, fontWeight: 400 }}>({pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%)</span>
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={onClose}>Cancelar</button>
+            <button className="btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={handleSubmit}>Guardar VL</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Inversiones() {
   const { posiciones, removePosicion, pesosObjetivo, updatePesoObjetivo } = useInversionesStore();
   const { dividendos, removeDividendo } = useDividendosStore();
@@ -144,6 +209,7 @@ export default function Inversiones() {
   const [showDivModal, setShowDivModal] = useState(false);
   const [editDiv, setEditDiv] = useState<Dividendo | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [vlModal, setVlModal] = useState<Posicion | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [, forceTickUpdate] = useState(0);
   const [aiAnalysis, setAiAnalysis] = useState('');
@@ -155,11 +221,13 @@ export default function Inversiones() {
   }, []);
 
   const getPrice = (p: Posicion): number => {
+    if (p.tipo === 'Fondo Indexado') return p.vl ?? p.precioMedio ?? 0;
     const cached = precios[p.simbolo];
     const mock = MOCK_TICKERS.find(t => t.symbol === p.simbolo);
     return cached?.precio ?? mock?.price ?? p.precioMedio ?? 0;
   };
   const getChange = (p: Posicion): number => {
+    if (p.tipo === 'Fondo Indexado') return 0;
     const cached = precios[p.simbolo];
     const mock = MOCK_TICKERS.find(t => t.symbol === p.simbolo);
     return cached?.variacion ?? mock?.change ?? 0;
@@ -192,7 +260,7 @@ export default function Inversiones() {
 
     // Separate crypto and non-crypto positions
     const cryptoPos = posiciones.filter(p => p.tipo === 'Crypto' || isCryptoSymbol(p.simbolo));
-    const stockPos = posiciones.filter(p => p.tipo !== 'Crypto' && !isCryptoSymbol(p.simbolo));
+    const stockPos = posiciones.filter(p => p.tipo !== 'Crypto' && !isCryptoSymbol(p.simbolo) && p.tipo !== 'Fondo Indexado');
 
     // Refresh stocks via Alpha Vantage
     await Promise.all(stockPos.map(async (p) => {
@@ -386,23 +454,43 @@ export default function Inversiones() {
                   <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px', borderBottom: i < byTipo(subTab).length - 1 ? '1px solid var(--border)' : 'none' }}>
                     {/* Avatar */}
                     <div style={{ width: 40, height: 40, borderRadius: 10, background: `${COLORS[i % COLORS.length]}22`, border: `1px solid ${COLORS[i % COLORS.length]}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, color: COLORS[i % COLORS.length], flexShrink: 0 }}>
-                      {p.simbolo.slice(0, 2)}
+                      {p.tipo === 'Fondo Indexado' ? p.nombre.slice(0, 2).toUpperCase() : p.simbolo.slice(0, 2)}
                     </div>
                     {/* Info */}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontWeight: 700, fontSize: 15 }}>{p.simbolo}</span>
-                        <span style={{ fontSize: 12, color: 'var(--text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 700, fontSize: 15 }}>
+                          {p.tipo === 'Fondo Indexado' ? p.nombre.slice(0, 28) : p.simbolo}
+                        </span>
+                        {p.tipo === 'Fondo Indexado' ? (
+                          <span style={{ fontSize: 10, background: 'rgba(168,85,247,0.15)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.3)', borderRadius: 4, padding: '1px 5px', fontWeight: 600, flexShrink: 0 }}>Fondo</span>
+                        ) : (
+                          <span style={{ fontSize: 12, color: 'var(--text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</span>
+                        )}
                       </div>
-                      <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>{p.acciones} acciones · {Number(peso ?? 0).toFixed(1)}% cartera</div>
+                      <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>
+                        {p.tipo === 'Fondo Indexado'
+                          ? `${p.acciones} participaciones${p.isin ? ' · ' + p.isin : ''}${p.gestora ? ' · ' + p.gestora : ''} · ${Number(peso ?? 0).toFixed(1)}% cartera`
+                          : `${p.acciones} acciones · ${Number(peso ?? 0).toFixed(1)}% cartera`
+                        }
+                      </div>
                     </div>
                     {/* Price */}
                     <div style={{ textAlign: 'right', minWidth: 90 }}>
-                      <div style={{ fontWeight: 600 }}>${Number(precio ?? 0).toFixed(2)}</div>
-                      <div style={{ fontSize: 12, color: (cambio ?? 0) >= 0 ? 'var(--green)' : 'var(--red)', display: 'flex', alignItems: 'center', gap: 3, justifyContent: 'flex-end' }}>
-                        {(cambio ?? 0) >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-                        {(cambio ?? 0) >= 0 ? '+' : ''}{Number(cambio ?? 0).toFixed(2)}%
-                      </div>
+                      {p.tipo === 'Fondo Indexado' ? (
+                        <>
+                          <div style={{ fontWeight: 600 }}>{fmtEur(precio)}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text2)' }}>VL {p.vlFecha ?? 'sin actualizar'}</div>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ fontWeight: 600 }}>${Number(precio ?? 0).toFixed(2)}</div>
+                          <div style={{ fontSize: 12, color: (cambio ?? 0) >= 0 ? 'var(--green)' : 'var(--red)', display: 'flex', alignItems: 'center', gap: 3, justifyContent: 'flex-end' }}>
+                            {(cambio ?? 0) >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+                            {(cambio ?? 0) >= 0 ? '+' : ''}{Number(cambio ?? 0).toFixed(2)}%
+                          </div>
+                        </>
+                      )}
                     </div>
                     {/* PnL */}
                     <div style={{ textAlign: 'right', minWidth: 90 }}>
@@ -413,6 +501,11 @@ export default function Inversiones() {
                     </div>
                     {/* Actions */}
                     <div style={{ display: 'flex', gap: 2 }}>
+                      {p.tipo === 'Fondo Indexado' && (
+                        <button className="btn-icon" style={{ padding: '4px 7px', fontSize: 10, fontWeight: 700, color: 'var(--blue)' }} title="Actualizar VL" onClick={() => setVlModal(p)}>
+                          VL
+                        </button>
+                      )}
                       <button className="btn-icon" style={{ padding: 6 }} title="Editar" onClick={() => setEditPosicion(p)}>
                         <Pencil size={13} />
                       </button>
@@ -449,6 +542,68 @@ export default function Inversiones() {
               const precio = getPrice(p) || 0;
               const cambio = getChange(p) || 0;
               const pnlP = p.precioMedio ? ((precio - p.precioMedio) / p.precioMedio) * 100 : 0;
+              if (p.tipo === 'Fondo Indexado') {
+                const totalInv = p.acciones * p.precioMedio;
+                const valorAct = p.acciones * precio;
+                const pnlFEur = valorAct - totalInv;
+                const dias = p.fechaCompra ? Math.floor((Date.now() - new Date(p.fechaCompra).getTime()) / 86400000) : 0;
+                const anualizadoPct = dias >= 30 && p.precioMedio > 0 && precio > 0
+                  ? (Math.pow(precio / p.precioMedio, 365 / dias) - 1) * 100 : null;
+                return (
+                  <div key={p.id} className="card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ width: 36, height: 36, borderRadius: 8, background: `${COLORS[i % COLORS.length]}22`, border: `1px solid ${COLORS[i % COLORS.length]}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12, color: COLORS[i % COLORS.length] }}>
+                          {p.nombre.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ fontWeight: 700, fontSize: 13 }}>{p.nombre.slice(0, 22)}</div>
+                            <span style={{ fontSize: 10, background: 'rgba(168,85,247,0.15)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.3)', borderRadius: 4, padding: '1px 5px', fontWeight: 600 }}>Fondo</span>
+                          </div>
+                          <div style={{ fontSize: 11, color: 'var(--text2)' }}>{p.isin}{p.gestora ? ' · ' + p.gestora : ''}</div>
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontWeight: 700, fontSize: 16 }}>{fmtEur(precio)}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text2)' }}>VL {p.vlFecha ?? 'sin actualizar'}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: anualizadoPct !== null ? '1fr 1fr 1fr 1fr' : '1fr 1fr 1fr', gap: 8 }}>
+                      <div style={{ background: 'var(--bg3)', borderRadius: 6, padding: '6px 10px' }}>
+                        <div style={{ fontSize: 11, color: 'var(--text2)' }}>Compra media</div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>{fmtEur(p.precioMedio)}</div>
+                      </div>
+                      <div style={{ background: 'var(--bg3)', borderRadius: 6, padding: '6px 10px' }}>
+                        <div style={{ fontSize: 11, color: 'var(--text2)' }}>Participaciones</div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>{p.acciones}</div>
+                      </div>
+                      <div style={{ background: 'var(--bg3)', borderRadius: 6, padding: '6px 10px' }}>
+                        <div style={{ fontSize: 11, color: 'var(--text2)' }}>P&L total</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: pnlP >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                          {pnlP >= 0 ? '+' : ''}{pnlP.toFixed(1)}%
+                        </div>
+                      </div>
+                      {anualizadoPct !== null && (
+                        <div style={{ background: 'var(--bg3)', borderRadius: 6, padding: '6px 10px' }}>
+                          <div style={{ fontSize: 11, color: 'var(--text2)' }}>Rentab. anual.</div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: anualizadoPct >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                            {anualizadoPct >= 0 ? '+' : ''}{anualizadoPct.toFixed(1)}%
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+                      <div style={{ fontSize: 12, color: 'var(--text2)' }}>
+                        Invertido: {fmtEur(totalInv)} · Valor: {fmtEur(valorAct)} · P&L: <span style={{ color: pnlFEur >= 0 ? 'var(--green)' : 'var(--red)' }}>{pnlFEur >= 0 ? '+' : ''}{fmtEur(pnlFEur)}</span>
+                      </div>
+                      <button style={{ fontSize: 11, padding: '4px 10px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 6, color: 'var(--blue)', cursor: 'pointer' }} onClick={() => setVlModal(p)}>
+                        Actualizar VL
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
               return (
                 <div key={p.id} className="card">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
@@ -700,6 +855,7 @@ export default function Inversiones() {
       })()}
 
       {showModal && <ModalAddPosicion onClose={() => setShowModal(false)} />}
+      {vlModal && <ModalActualizarVL posicion={vlModal} onClose={() => setVlModal(null)} />}
       {editPosicion && <ModalEditPosicion posicion={editPosicion} onClose={() => setEditPosicion(null)} />}
       {showDivModal && <ModalDividendo posiciones={posiciones} onClose={() => setShowDivModal(false)} />}
       {editDiv && <ModalDividendo dividendo={editDiv} posiciones={posiciones} onClose={() => setEditDiv(null)} />}
