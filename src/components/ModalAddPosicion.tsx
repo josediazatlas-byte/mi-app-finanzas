@@ -142,7 +142,7 @@ export default function ModalAddPosicion({ onClose }: Props) {
   const isFondo = form.tipo === 'Fondo Indexado';
 
   return (
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay">
       <div className="modal" style={{ maxWidth: isFondo ? 560 : undefined }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h2 style={{ fontSize: 18, fontWeight: 700 }}>Añadir Posición</h2>

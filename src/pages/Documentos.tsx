@@ -36,7 +36,7 @@ function ModalCliente({ cliente, onClose, onSaved }: { cliente?: Cliente | null;
     }
   };
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay">
       <div className="modal" style={{ maxWidth: 460 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
           <h2 style={{ fontSize: 16, fontWeight: 700 }}>{isEdit ? 'Editar' : 'Nuevo'} Cliente</h2>
@@ -203,7 +203,7 @@ function ModalFactura({ factura, onClose }: { factura?: Factura | null; onClose:
   };
 
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay">
       <div className="modal" style={{ maxWidth: 700, maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexShrink: 0 }}>
           <h2 style={{ fontSize: 16, fontWeight: 700 }}>{isEdit ? `Factura ${factura!.numero}` : 'Nueva Factura'}</h2>
@@ -562,7 +562,7 @@ function TabTickets() {
 
       {/* Detail modal */}
       {verTicket && (
-        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setVerTicket(null)}>
+        <div className="modal-overlay">
           <div className="modal" style={{ maxWidth: 480 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
               <h3 style={{ fontWeight: 700 }}>{verTicket.establecimiento || 'Ticket'}</h3>

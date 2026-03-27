@@ -39,7 +39,7 @@ function PanelIngresos({ ingresos, titulo, onClose }: { ingresos: Ingreso[]; tit
 
   return (
     <>
-      <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal-overlay">
         <div className="modal" style={{ maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
           {/* Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexShrink: 0 }}>
@@ -107,7 +107,7 @@ function PanelGastos({ gastos, titulo, onClose }: { gastos: Gasto[]; titulo: str
 
   return (
     <>
-      <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal-overlay">
         <div className="modal" style={{ maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
           {/* Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexShrink: 0 }}>
@@ -177,7 +177,7 @@ function PanelAhorro({ ingresosTotal, gastosTotal, titulo, onClose }: { ingresos
   const msg = mensajes[nivel];
 
   return (
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay">
       <div className="modal">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div>
@@ -332,7 +332,7 @@ function PanelPatrimonio({ onClose }: { onClose: () => void }) {
   });
 
   return (
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay">
       <div className="modal" style={{ maxWidth: 600, maxHeight: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexShrink: 0 }}>
@@ -574,7 +574,7 @@ function ModalMeta({ meta, onClose }: { meta?: Meta | null; onClose: () => void 
     onClose();
   };
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay">
       <div className="modal" style={{ maxWidth: 500 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h2 style={{ fontSize: 17, fontWeight: 700 }}>{isEdit ? 'Editar' : 'Nueva'} Meta</h2>
@@ -758,7 +758,7 @@ function SectionMetas() {
       {showModal && <ModalMeta meta={editMeta} onClose={() => { setShowModal(false); setEditMeta(null); }} />}
 
       {aportarItem && (
-        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setAportarItem(null)}>
+        <div className="modal-overlay">
           <div className="modal" style={{ maxWidth: 380 }}>
             <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Aportar a "{aportarItem.nombre}"</h3>
             <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 12 }}>

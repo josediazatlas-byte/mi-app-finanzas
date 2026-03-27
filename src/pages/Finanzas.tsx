@@ -50,7 +50,7 @@ function PanelIngresos({ ingresos, titulo, onClose }: { ingresos: Ingreso[]; tit
 
   return (
     <>
-      <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal-overlay">
         <div className="modal" style={{ maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexShrink: 0 }}>
             <div>
@@ -107,7 +107,7 @@ function PanelGastos({ gastos, titulo, onClose }: { gastos: Gasto[]; titulo: str
 
   return (
     <>
-      <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal-overlay">
         <div className="modal" style={{ maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexShrink: 0 }}>
             <div>
@@ -173,7 +173,7 @@ function PanelAhorro({ ingresosTotal, gastosTotal, prevIngresosTotal, prevGastos
   const msg = mensajes[nivel];
 
   return (
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay">
       <div className="modal" style={{ maxHeight: '85vh', overflowY: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div>
@@ -332,7 +332,7 @@ function ModalInvertir({ eurInvertir, planInversion, totalIng, onClose }: {
   );
 
   return (
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay">
       <div className="modal" style={{ maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexShrink: 0 }}>
           <div>
@@ -458,7 +458,7 @@ function ModalGastosDesglose({ gastos, prevGastos, totalGas, titulo, onClose }: 
 
   return (
     <>
-      <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal-overlay">
         <div className="modal" style={{ maxWidth: 520, maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
           {/* Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexShrink: 0 }}>
@@ -641,7 +641,7 @@ function ModalLibre({ eurLibre, totalIng, totalGas, planInversion, onClose }: {
   );
 
   return (
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay">
       <div className="modal" style={{ maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexShrink: 0 }}>
           <div>
@@ -790,7 +790,7 @@ function ModalDeuda({ deuda, onClose }: { deuda?: Deuda; onClose: () => void }) 
     onClose();
   };
   return (
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay">
       <div className="modal">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h2 style={{ fontSize: 18, fontWeight: 700 }}>{isEdit ? 'Editar' : 'Nueva'} deuda</h2>
@@ -1088,7 +1088,7 @@ function ModalInmueble({ inmueble, onClose }: { inmueble?: Inmueble; onClose: ()
   };
 
   return (
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay">
       <div className="modal" style={{ maxWidth: 560, maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexShrink: 0 }}>
           <h2 style={{ fontSize: 18, fontWeight: 700 }}>{isEdit ? 'Editar' : 'Nuevo'} inmueble</h2>
@@ -1204,7 +1204,7 @@ function PanelDetalleInmueble({ inmueble, onClose, onEdit }: { inmueble: Inmuebl
   const barData = MESES_C.map(mes => ({ mes, ingresos: inmueble.rentaMensualBruta, gastos: gastosTotalMes(inmueble) }));
 
   return (
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay">
       <div className="modal" style={{ maxWidth: 580, maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexShrink: 0 }}>
@@ -1496,7 +1496,7 @@ function ModalCuenta({ onClose, cuenta }: ModalCuentaProps) {
   };
 
   return (
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay">
       <div className="modal">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h2 style={{ fontSize: 18, fontWeight: 700 }}>{isEdit ? 'Editar Cuenta' : 'Nueva Cuenta'}</h2>
@@ -1578,7 +1578,7 @@ function ModalSuscripcion({ suscripcion, onClose }: { suscripcion?: Suscripcion 
     onClose();
   };
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay">
       <div className="modal" style={{ maxWidth: 480 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h2 style={{ fontSize: 17, fontWeight: 700 }}>{isEdit ? 'Editar' : 'Nueva'} Suscripción</h2>

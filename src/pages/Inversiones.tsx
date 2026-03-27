@@ -31,7 +31,7 @@ function ModalEditPosicion({ posicion, onClose }: { posicion: Posicion; onClose:
   };
 
   return (
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay">
       <div className="modal">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div>
@@ -84,7 +84,7 @@ function ModalDividendo({ dividendo, posiciones, onClose }: { dividendo?: Divide
     onClose();
   };
   return (
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay">
       <div className="modal">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h2 style={{ fontSize: 18, fontWeight: 700 }}>{isEdit ? 'Editar' : 'Registrar'} dividendo</h2>
@@ -150,7 +150,7 @@ function ModalActualizarVL({ posicion, onClose }: { posicion: Posicion; onClose:
   const pnlEur = valorActual - totalInvertido;
 
   return (
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay">
       <div className="modal" style={{ maxWidth: 420 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div>

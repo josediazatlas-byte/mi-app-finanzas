@@ -31,7 +31,7 @@ export default function ModalIngreso({ onClose, ingreso }: Props) {
   };
 
   return (
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay">
       <div className="modal">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h2 style={{ fontSize: 18, fontWeight: 700 }}>{isEdit ? 'Editar Ingreso' : 'Añadir Ingreso'}</h2>
