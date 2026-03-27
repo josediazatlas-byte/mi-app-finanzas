@@ -17,6 +17,7 @@ import { useMercadoStore } from '../stores/useMercadoStore';
 import { MOCK_TICKERS } from '../services/alphaVantage';
 import { buildFinancialContext, callClaudeAPI, SYSTEM_PROMPT } from '../utils/aiContext';
 import { getFearAndGreed } from '../services/financialModelingPrep';
+import FondoEmergenciaWidget from '../components/FondoEmergencia';
 import ModalIngreso from '../components/ModalIngreso';
 import ModalGasto from '../components/ModalGasto';
 import ModalAddPosicion from '../components/ModalAddPosicion';
@@ -1148,6 +1149,9 @@ export default function Inicio() {
 
       {/* Metas Financieras */}
       <SectionMetas />
+
+      {/* Fondo de Emergencia */}
+      <FondoEmergenciaWidget />
 
       {/* IA Insights */}
       <div className="card">
