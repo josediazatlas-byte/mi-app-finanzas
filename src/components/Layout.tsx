@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { BarChart3, Home, TrendingUp, Wrench, Settings, X, Bell, FileDown, FileText, MessageSquare } from 'lucide-react';
+import { BarChart3, Home, TrendingUp, Wrench, Settings, X, Bell, FileDown, FileText, MessageSquare, LogOut, Cloud, CloudOff, Loader2, CheckCircle2 } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import { useSyncStore } from '../hooks/useSupabaseSync';
 import { useConfigStore } from '../stores/useConfigStore';
 import { useAlertasStore } from '../stores/useAlertasStore';
 import { useFinanzasStore } from '../stores/useFinanzasStore';
@@ -30,10 +32,14 @@ export default function Layout() {
   const [showSettings, setShowSettings] = useState(false);
   const [showAlertas, setShowAlertas] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const alertasPanelRef = useRef<HTMLDivElement>(null);
   const { apiKey, exchangeRateKey } = useConfigStore();
   const { setExchangeRates } = useMercadoStore();
   const isDemo = !apiKey;
+  const { user, signOut } = useAuth();
+  const { status: syncStatus, lastSync } = useSyncStore();
   const { alertas, addAlerta, marcarLeida, marcarTodasLeidas, removeAlerta } = useAlertasStore();
   const { ingresos, gastos, cuentas } = useFinanzasStore();
   const { deudas } = useDeudaStore();
@@ -150,16 +156,24 @@ export default function Layout() {
     });
   }, []); // Only on mount to avoid spam
 
-  // Close panel on outside click
+  // Close panels on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (alertasPanelRef.current && !alertasPanelRef.current.contains(e.target as Node)) {
         setShowAlertas(false);
       }
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false);
+      }
     };
-    if (showAlertas) document.addEventListener('mousedown', handler);
+    document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [showAlertas]);
+  }, []);
+
+  const handleSignOut = async () => {
+    setShowUserMenu(false);
+    await signOut();
+  };
 
   const handleExportPDF = async () => {
     try {
@@ -255,6 +269,17 @@ export default function Layout() {
               </div>
             )}
           </div>
+          {/* Sync indicator */}
+          <div title={lastSync ? `Última sync: ${new Date(lastSync).toLocaleTimeString('es-ES')}` : 'Sin sincronizar'} style={{ display: 'flex', alignItems: 'center' }}>
+            {syncStatus === 'syncing' || syncStatus === 'loading'
+              ? <Loader2 size={14} color="var(--blue)" style={{ animation: 'spin 1s linear infinite' }} />
+              : syncStatus === 'error'
+              ? <CloudOff size={14} color="var(--red)" />
+              : syncStatus === 'synced'
+              ? <CheckCircle2 size={14} color="var(--green)" />
+              : <Cloud size={14} color="var(--text2)" />
+            }
+          </div>
           {/* Chat IA */}
           <button className="btn-icon" onClick={() => setShowChat(!showChat)} title="Asesor IA" style={{ position: 'relative' }}>
             <MessageSquare size={16} />
@@ -267,6 +292,48 @@ export default function Layout() {
           <button className="btn-icon" onClick={() => setShowSettings(true)}>
             <Settings size={16} />
           </button>
+          {/* User menu */}
+          <div style={{ position: 'relative' }} ref={userMenuRef}>
+            <button
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              title={user?.email ?? 'Usuario'}
+              style={{
+                width: 30, height: 30, borderRadius: '50%',
+                background: 'var(--blue)', border: 'none',
+                color: 'white', fontWeight: 700, fontSize: 13,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              {(user?.email?.[0] ?? 'U').toUpperCase()}
+            </button>
+            {showUserMenu && (
+              <div style={{
+                position: 'absolute', top: 38, right: 0, width: 220,
+                background: 'var(--bg2)', border: '1px solid var(--border)',
+                borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                zIndex: 500, overflow: 'hidden',
+              }}>
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 2 }}>Conectado como</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {user?.email}
+                  </div>
+                </div>
+                <button
+                  onClick={handleSignOut}
+                  style={{
+                    width: '100%', padding: '12px 16px', background: 'none',
+                    border: 'none', cursor: 'pointer', textAlign: 'left',
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    color: 'var(--red)', fontSize: 14, fontWeight: 500,
+                  }}
+                >
+                  <LogOut size={15} />
+                  Cerrar sesión
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -292,6 +359,7 @@ export default function Layout() {
 
       <style>{`
         @media (max-width: 768px) { .hide-mobile { display: none; } }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
     </div>
   );
