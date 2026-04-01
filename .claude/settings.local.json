@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(npm info:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(find C:UsersJoseDesktopmi-app-finanzassrcstores -type f -name *.ts)",
+      "Bash(find C:UsersJoseDesktopmi-app-finanzassrcpages -type f -name *.tsx)",
+      "Bash(npx tsc:*)"
     ]
   }
 }
