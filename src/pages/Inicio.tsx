@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, TrendingUp, Search, Target, AlertTriangle, ChevronRight, Pencil, Trash2, X, Bot, RefreshCw, MessageSquare } from 'lucide-react';
+import { Plus, TrendingUp, Search, Target, AlertTriangle, ChevronRight, Pencil, Trash2, X, Bot, RefreshCw, MessageSquare, Eye, EyeOff } from 'lucide-react';
 import { useFinanzasStore } from '../stores/useFinanzasStore';
 import type { Ingreso, Gasto } from '../stores/useFinanzasStore';
 import { useInversionesStore } from '../stores/useInversionesStore';
@@ -642,6 +642,8 @@ function ModalMeta({ meta, onClose }: { meta?: Meta | null; onClose: () => void 
 function SectionMetas() {
   const { metas, removeMeta, aportarMeta } = useMetasStore();
   const { addGasto } = useFinanzasStore();
+  const { privacyMode } = useConfigStore();
+  const fmtMeta = (v: number) => privacyMode ? '••••••• €' : fmtEur(v);
   const [showModal, setShowModal] = useState(false);
   const [editMeta, setEditMeta] = useState<Meta | null>(null);
   const [aportarItem, setAportarItem] = useState<Meta | null>(null);
@@ -683,7 +685,7 @@ function SectionMetas() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
           <h3 style={{ fontSize: 16, fontWeight: 700 }}>🎯 Metas Financieras</h3>
-          <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>{metas.length} metas · {fmtEur(totalAhorrado)} de {fmtEur(totalObjetivos)} ahorrados</div>
+          <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>{metas.length} metas · {fmtMeta(totalAhorrado)} de {fmtMeta(totalObjetivos)} ahorrados</div>
         </div>
         <button className="btn-primary" style={{ padding: '6px 14px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => { setEditMeta(null); setShowModal(true); }}>
           <Plus size={14} /> Nueva meta
@@ -693,9 +695,9 @@ function SectionMetas() {
       {/* Summary row */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
         {[
-          { label: 'Total objetivos', val: fmtEur(totalObjetivos), color: 'var(--text)' },
-          { label: 'Total ahorrado', val: fmtEur(totalAhorrado), color: 'var(--green)' },
-          { label: 'Aportación/mes', val: fmtEur(totalAportacion), color: 'var(--blue)' },
+          { label: 'Total objetivos', val: fmtMeta(totalObjetivos), color: 'var(--text)' },
+          { label: 'Total ahorrado', val: fmtMeta(totalAhorrado), color: 'var(--green)' },
+          { label: 'Aportación/mes', val: fmtMeta(totalAportacion), color: 'var(--blue)' },
         ].map(item => (
           <div key={item.label} style={{ background: 'var(--bg3)', borderRadius: 8, padding: '10px 12px' }}>
             <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 3 }}>{item.label}</div>
@@ -738,8 +740,8 @@ function SectionMetas() {
             </div>
             {/* Key metrics */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
-              <div style={{ fontSize: 11 }}><span style={{ color: 'var(--text2)' }}>Ahorrado: </span><span style={{ fontWeight: 600, color: 'var(--green)' }}>{fmtEur(m.ahorrado)}</span></div>
-              <div style={{ fontSize: 11 }}><span style={{ color: 'var(--text2)' }}>Falta: </span><span style={{ fontWeight: 600 }}>{fmtEur(m.falta)}</span></div>
+              <div style={{ fontSize: 11 }}><span style={{ color: 'var(--text2)' }}>Ahorrado: </span><span style={{ fontWeight: 600, color: 'var(--green)' }}>{fmtMeta(m.ahorrado)}</span></div>
+              <div style={{ fontSize: 11 }}><span style={{ color: 'var(--text2)' }}>Falta: </span><span style={{ fontWeight: 600 }}>{fmtMeta(m.falta)}</span></div>
               <div style={{ fontSize: 11 }}><span style={{ color: 'var(--text2)' }}>Meses necesarios: </span><span style={{ fontWeight: 600 }}>{m.mesesNecesarios === 9999 ? '∞' : m.mesesNecesarios}</span></div>
               <div style={{ fontSize: 11 }}>
                 {m.falta === 0
@@ -818,7 +820,7 @@ export default function Inicio() {
   const [panel, setPanel] = useState<'ingresos' | 'gastos' | 'ahorro' | null>(null);
   const [showPatrimonio, setShowPatrimonio] = useState(false);
   const [historicoPeriodo, setHistoricoPeriodo] = useState<6 | 12>(12);
-  const { anthropicKey } = useConfigStore();
+  const { anthropicKey, privacyMode, setPrivacyMode, autonomo } = useConfigStore();
   const [aiInsights, setAiInsights] = useState<string[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [fng, setFng] = useState<{ value: number; label: string; color: string } | null>(null);
@@ -902,6 +904,26 @@ export default function Inicio() {
     return sum + toEur(precioActual * p.acciones * (pctChange ?? 0) / 100, p.divisa);
   }, 0);
 
+  // Privacy helper
+  const fmt = (v: number) => privacyMode ? '••••••• €' : fmtEur(v);
+
+  // Greeting
+  const getGreeting = () => {
+    const h = new Date().getHours();
+    if (h >= 6 && h < 12) return 'Buenos días';
+    if (h >= 12 && h < 20) return 'Buenas tardes';
+    return 'Buenas noches';
+  };
+  const DIAS_ES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+  const nombreUsuario = autonomo.nombre ? autonomo.nombre.split(' ')[0] : '';
+  const greetingText = `${getGreeting()}${nombreUsuario ? `, ${nombreUsuario}` : ''}`;
+  const diaStr = DIAS_ES[new Date().getDay()];
+  const fechaCompleta = `${new Date().getDate()} de ${MESES_ES[new Date().getMonth()]} de ${new Date().getFullYear()}`;
+  const variacionTexto = variacionDia === 0
+    ? 'Tu cartera no ha variado hoy'
+    : `Tu cartera ha variado ${variacionDia >= 0 ? '+' : ''}${fmtEur(variacionDia)} hoy`;
+  const resumenDia = `Hoy es ${diaStr}. ${privacyMode ? 'Los valores están ocultos.' : variacionTexto}.`;
+
   const liquidezPct = patrimonioNeto > 0 ? (saldoCuentas / patrimonioNeto) * 100 : 0;
   const progreso = Math.min((patrimonioNeto / objetivoFinanciero) * 100, 100);
 
@@ -963,6 +985,25 @@ export default function Inicio() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+      {/* ——— Saludo personalizado ——— */}
+      <div style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #161618 100%)', border: '1px solid #2a2a42', borderRadius: 16, padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>{greetingText}</div>
+          <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 8 }}>{fechaCompleta}</div>
+          <div style={{ fontSize: 13, color: 'var(--text2)', fontStyle: 'italic' }}>{resumenDia}</div>
+        </div>
+        <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 16 }}>
+          {fng && (
+            <div style={{ background: `${fng.color}15`, border: `1px solid ${fng.color}40`, borderRadius: 10, padding: '8px 14px', display: 'inline-block' }}>
+              <div style={{ fontSize: 10, color: 'var(--text2)', marginBottom: 2 }}>Fear & Greed</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: fng.color, lineHeight: 1 }}>{fng.value}</div>
+              <div style={{ fontSize: 10, fontWeight: 600, color: fng.color }}>{fng.label}</div>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Alert */}
       {liquidezPct < 10 && patrimonioNeto > 0 && (
         <div style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 12, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -976,32 +1017,67 @@ export default function Inicio() {
         </div>
       )}
 
-      {/* Patrimonio card */}
+      {/* ——— Quick actions (prominentes) ——— */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+        <button className="card card-hover" style={{ textAlign: 'left', border: '1px solid rgba(59,130,246,0.3)', cursor: 'pointer', background: 'rgba(59,130,246,0.08)', padding: '16px 18px' }} onClick={() => setShowModalIngreso(true)}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <div style={{ background: 'var(--blue)', borderRadius: 8, padding: 8, display: 'flex' }}><Plus size={16} color="white" /></div>
+            <span style={{ fontWeight: 700, fontSize: 15 }}>Añadir dinero</span>
+          </div>
+          <p style={{ fontSize: 12, color: 'var(--text2)', margin: 0 }}>Registrar ingreso o movimiento</p>
+        </button>
+        <button className="card card-hover" style={{ textAlign: 'left', border: '1px solid rgba(34,197,94,0.3)', cursor: 'pointer', background: 'rgba(34,197,94,0.08)', padding: '16px 18px' }} onClick={() => setShowModalPosicion(true)}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <div style={{ background: 'var(--green)', borderRadius: 8, padding: 8, display: 'flex' }}><TrendingUp size={16} color="white" /></div>
+            <span style={{ fontWeight: 700, fontSize: 15 }}>Añadir inversión</span>
+          </div>
+          <p style={{ fontSize: 12, color: 'var(--text2)', margin: 0 }}>Nueva posición en cartera</p>
+        </button>
+        <button className="card card-hover" style={{ textAlign: 'left', border: '1px solid rgba(167,139,250,0.3)', cursor: 'pointer', background: 'rgba(167,139,250,0.08)', padding: '16px 18px' }} onClick={() => navigate('/analisis')}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <div style={{ background: 'var(--purple)', borderRadius: 8, padding: 8, display: 'flex' }}><Search size={16} color="white" /></div>
+            <span style={{ fontWeight: 700, fontSize: 15 }}>Analizar activo</span>
+          </div>
+          <p style={{ fontSize: 12, color: 'var(--text2)', margin: 0 }}>Ver análisis de mercado</p>
+        </button>
+      </div>
+
+      {/* ——— Patrimonio Neto (card compacta) ——— */}
       <div className="card card-hover" style={{ background: 'linear-gradient(135deg, #1e1e2e 0%, #161618 100%)', border: '1px solid #2a2a42', cursor: 'pointer' }} onClick={() => setShowPatrimonio(true)}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <div style={{ fontSize: 13, color: 'var(--text2)' }}>Patrimonio Neto</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: 'var(--text2)', opacity: 0.7 }}>
-            <span>ver desglose</span>
-            <ChevronRight size={13} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div style={{ fontSize: 13, color: 'var(--text2)', fontWeight: 500 }}>Patrimonio Neto</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={(e) => { e.stopPropagation(); setPrivacyMode(!privacyMode); }}
+              title={privacyMode ? 'Mostrar valor' : 'Ocultar valor'}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text2)', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 6 }}
+            >
+              {privacyMode ? <EyeOff size={15} /> : <Eye size={15} />}
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: 'var(--text2)', opacity: 0.7 }}>
+              <span>ver desglose</span>
+              <ChevronRight size={13} />
+            </div>
           </div>
         </div>
-        <div style={{ fontSize: 42, fontWeight: 800, letterSpacing: '-1px', marginBottom: 6 }}>{fmtEur(patrimonioNeto)}</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-          <span style={{ color: variacionDia >= 0 ? 'var(--green)' : 'var(--red)', fontSize: 16, fontWeight: 600 }}>
-            {variacionDia >= 0 ? '+' : ''}{fmtEur(variacionDia)}
-          </span>
-          <span style={{ color: 'var(--text2)', fontSize: 13 }}>hoy</span>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 36, fontWeight: 800, letterSpacing: '-1px' }}>{fmt(patrimonioNeto)}</div>
+          {!privacyMode && (
+            <span style={{ color: variacionDia >= 0 ? 'var(--green)' : 'var(--red)', fontSize: 15, fontWeight: 600 }}>
+              {variacionDia >= 0 ? '+' : ''}{fmtEur(variacionDia)} hoy
+            </span>
+          )}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
           <div>
             <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Liquidez</div>
-            <div style={{ fontWeight: 600 }}>{fmtEur(saldoCuentas)}</div>
-            <div style={{ fontSize: 12, color: liquidezPct < 10 ? 'var(--amber)' : 'var(--text2)' }}>{Number(liquidezPct ?? 0).toFixed(1)}%</div>
+            <div style={{ fontWeight: 600 }}>{fmt(saldoCuentas)}</div>
+            <div style={{ fontSize: 12, color: liquidezPct < 10 ? 'var(--amber)' : 'var(--text2)' }}>{privacyMode ? '—' : `${Number(liquidezPct ?? 0).toFixed(1)}%`}</div>
           </div>
           <div>
             <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Inversiones</div>
-            <div style={{ fontWeight: 600 }}>{fmtEur(valorInversiones)}</div>
-            <div style={{ fontSize: 12, color: 'var(--text2)' }}>{patrimonioNeto > 0 ? ((valorInversiones / patrimonioNeto) * 100).toFixed(1) : 0}%</div>
+            <div style={{ fontWeight: 600 }}>{fmt(valorInversiones)}</div>
+            <div style={{ fontSize: 12, color: 'var(--text2)' }}>{privacyMode ? '—' : `${patrimonioNeto > 0 ? ((valorInversiones / patrimonioNeto) * 100).toFixed(1) : 0}%`}</div>
           </div>
           <div>
             <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Posiciones</div>
@@ -1016,13 +1092,13 @@ export default function Inicio() {
               <Target size={14} /> Objetivo financiero
             </div>
             {editObjetivo ? (
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }} onClick={e => e.stopPropagation()}>
                 <input className="input" style={{ width: 120, padding: '4px 8px', fontSize: 13 }} value={tmpObjetivo} onChange={(e) => setTmpObjetivo(e.target.value)} />
                 <button className="btn-primary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => { setObjetivoFinanciero(parseFloat(tmpObjetivo) || objetivoFinanciero); setEditObjetivo(false); }}>OK</button>
               </div>
             ) : (
-              <button style={{ background: 'none', border: 'none', color: 'var(--blue)', cursor: 'pointer', fontSize: 13 }} onClick={() => setEditObjetivo(true)}>
-                {fmtEur(objetivoFinanciero)} ✏️
+              <button style={{ background: 'none', border: 'none', color: 'var(--blue)', cursor: 'pointer', fontSize: 13 }} onClick={(e) => { e.stopPropagation(); setEditObjetivo(true); }}>
+                {privacyMode ? '••••••• €' : fmtEur(objetivoFinanciero)} ✏️
               </button>
             )}
           </div>
@@ -1031,48 +1107,8 @@ export default function Inicio() {
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 12, color: 'var(--text2)' }}>
             <span>{Number(progreso ?? 0).toFixed(1)}% completado</span>
-            <span>Faltan {fmtEur(Math.max(0, objetivoFinanciero - patrimonioNeto))}</span>
+            <span>Faltan {fmt(Math.max(0, objetivoFinanciero - patrimonioNeto))}</span>
           </div>
-        </div>
-      </div>
-
-      {/* Quick actions */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
-        <button className="card card-hover" style={{ textAlign: 'left', border: 'none', cursor: 'pointer', background: 'rgba(59,130,246,0.1)', borderColor: 'rgba(59,130,246,0.3)' }} onClick={() => setShowModalIngreso(true)}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <div style={{ background: 'var(--blue)', borderRadius: 6, padding: 6 }}><Plus size={14} color="white" /></div>
-            <span style={{ fontWeight: 600, fontSize: 14 }}>Añadir dinero</span>
-          </div>
-          <p style={{ fontSize: 12, color: 'var(--text2)' }}>Registrar ingreso</p>
-        </button>
-        <button className="card card-hover" style={{ textAlign: 'left', border: 'none', cursor: 'pointer', background: 'rgba(34,197,94,0.1)', borderColor: 'rgba(34,197,94,0.3)' }} onClick={() => setShowModalPosicion(true)}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <div style={{ background: 'var(--green)', borderRadius: 6, padding: 6 }}><TrendingUp size={14} color="white" /></div>
-            <span style={{ fontWeight: 600, fontSize: 14 }}>Añadir inversión</span>
-          </div>
-          <p style={{ fontSize: 12, color: 'var(--text2)' }}>Nueva posición</p>
-        </button>
-        <button className="card card-hover" style={{ textAlign: 'left', border: 'none', cursor: 'pointer', background: 'rgba(167,139,250,0.1)', borderColor: 'rgba(167,139,250,0.3)' }} onClick={() => navigate('/analisis')}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <div style={{ background: 'var(--purple)', borderRadius: 6, padding: 6 }}><Search size={14} color="white" /></div>
-            <span style={{ fontWeight: 600, fontSize: 14 }}>Analizar activo</span>
-          </div>
-          <p style={{ fontSize: 12, color: 'var(--text2)' }}>Ver análisis</p>
-        </button>
-        {/* Fear & Greed widget */}
-        <div className="card" style={{ background: fng ? `${fng.color}12` : 'var(--bg2)', borderColor: fng ? `${fng.color}40` : 'var(--border)' }}>
-          <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 4 }}>Fear & Greed</div>
-          {fng ? (
-            <>
-              <div style={{ fontSize: 24, fontWeight: 800, color: fng.color, lineHeight: 1, marginBottom: 2 }}>{fng.value}</div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: fng.color }}>{fng.label}</div>
-              <div style={{ background: 'var(--bg2)', borderRadius: 3, height: 4, overflow: 'hidden', marginTop: 6 }}>
-                <div style={{ height: '100%', width: `${fng.value}%`, background: `linear-gradient(90deg, #ef4444, #f59e0b, #22c55e)`, borderRadius: 3 }} />
-              </div>
-            </>
-          ) : (
-            <div style={{ fontSize: 12, color: 'var(--text2)' }}>Cargando...</div>
-          )}
         </div>
       </div>
 
@@ -1083,7 +1119,7 @@ export default function Inicio() {
             <div style={{ fontSize: 12, color: 'var(--text2)' }}>Ingresos del mes</div>
             <ChevronRight size={14} color="var(--text2)" />
           </div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--green)' }}>{fmtEur(ingresosTotal)}</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--green)' }}>{fmt(ingresosTotal)}</div>
           <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 4 }}>{allIngMes.length} entradas · ver detalle</div>
         </div>
         <div className="card card-hover" style={cardClickStyle} onClick={() => setPanel('gastos')}>
@@ -1091,7 +1127,7 @@ export default function Inicio() {
             <div style={{ fontSize: 12, color: 'var(--text2)' }}>Gastos del mes</div>
             <ChevronRight size={14} color="var(--text2)" />
           </div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--red)' }}>{fmtEur(gastosTotal)}</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--red)' }}>{fmt(gastosTotal)}</div>
           <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 4 }}>{allGasMes.length} entradas · ver detalle</div>
         </div>
         <div className="card card-hover" style={cardClickStyle} onClick={() => setPanel('ahorro')}>
@@ -1099,9 +1135,9 @@ export default function Inicio() {
             <div style={{ fontSize: 12, color: 'var(--text2)' }}>Ahorro del mes</div>
             <ChevronRight size={14} color="var(--text2)" />
           </div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: ahorro >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmtEur(ahorro)}</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: ahorro >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmt(ahorro)}</div>
           <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 4 }}>
-            {ingresosTotal > 0 ? Number((ahorro / ingresosTotal) * 100).toFixed(1) : '0.0'}% tasa ahorro · ver análisis
+            {!privacyMode && ingresosTotal > 0 ? `${Number((ahorro / ingresosTotal) * 100).toFixed(1)}% tasa ahorro · ` : ''}ver análisis
           </div>
         </div>
       </div>
@@ -1112,7 +1148,7 @@ export default function Inicio() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
             <div>
               <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 4 }}>Inversiones</div>
-              <div style={{ fontSize: 24, fontWeight: 700 }}>{fmtEur(valorInversiones)}</div>
+              <div style={{ fontSize: 24, fontWeight: 700 }}>{fmt(valorInversiones)}</div>
             </div>
             <ChevronRight size={18} color="var(--text2)" />
           </div>
@@ -1122,7 +1158,7 @@ export default function Inicio() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
             <div>
               <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 4 }}>Finanzas</div>
-              <div style={{ fontSize: 24, fontWeight: 700 }}>{fmtEur(saldoCuentas)}</div>
+              <div style={{ fontSize: 24, fontWeight: 700 }}>{fmt(saldoCuentas)}</div>
             </div>
             <ChevronRight size={18} color="var(--text2)" />
           </div>
@@ -1132,17 +1168,17 @@ export default function Inicio() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
             <div>
               <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 4 }}>🏠 Inmobiliario</div>
-              <div style={{ fontSize: 24, fontWeight: 700 }}>{fmtEur(equityInmuebles)}</div>
+              <div style={{ fontSize: 24, fontWeight: 700 }}>{fmt(equityInmuebles)}</div>
             </div>
             <ChevronRight size={18} color="var(--text2)" />
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>{inmuebles.length} inmuebles · valor {fmtEur(valorInmueblesTotal)}</div>
+          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>{inmuebles.length} inmuebles · valor {fmt(valorInmueblesTotal)}</div>
           {hipotecasInmuebles > 0 && (
-            <div style={{ fontSize: 11, color: 'var(--red)' }}>Hipotecas: -{fmtEur(hipotecasInmuebles)}</div>
+            <div style={{ fontSize: 11, color: 'var(--red)' }}>Hipotecas: -{privacyMode ? '••••••• €' : fmtEur(hipotecasInmuebles)}</div>
           )}
           {(() => {
             const rentaMes = inmuebles.filter(i => i.generaRenta).reduce((s, i) => s + i.rentaMensualBruta, 0);
-            return rentaMes > 0 ? <div style={{ fontSize: 11, color: 'var(--green)' }}>Renta bruta: {fmtEur(rentaMes)}/mes</div> : null;
+            return rentaMes > 0 ? <div style={{ fontSize: 11, color: 'var(--green)' }}>Renta bruta: {fmt(rentaMes)}/mes</div> : null;
           })()}
         </div>
       </div>
@@ -1239,7 +1275,7 @@ export default function Inicio() {
               ].map(item => (
                 <div key={item.label} style={{ background: 'var(--bg3)', borderRadius: 8, padding: '8px 12px' }}>
                   <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 3 }}>{item.label}</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: item.color }}>{item.val >= 0 && item.label === 'Variación' ? '+' : ''}{fmtEur(item.val)}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: item.color }}>{privacyMode ? '••••••• €' : `${item.val >= 0 && item.label === 'Variación' ? '+' : ''}${fmtEur(item.val)}`}</div>
                 </div>
               ))}
             </div>

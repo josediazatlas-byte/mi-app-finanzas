@@ -22,6 +22,7 @@ interface ConfigStore {
   autoRefresh: boolean;
   baseCurrency: 'EUR' | 'USD' | 'GBP';
   autonomo: AutonomoProfile;
+  privacyMode: boolean;
   setApiKey: (key: string) => void;
   setAnthropicKey: (key: string) => void;
   setFmpKey: (key: string) => void;
@@ -29,6 +30,7 @@ interface ConfigStore {
   setAutoRefresh: (v: boolean) => void;
   setBaseCurrency: (c: 'EUR' | 'USD' | 'GBP') => void;
   setAutonomo: (p: Partial<AutonomoProfile>) => void;
+  setPrivacyMode: (v: boolean) => void;
   exportData: () => void;
   importData: (json: string) => void;
   clearAllData: () => void;
@@ -44,6 +46,7 @@ export const useConfigStore = create<ConfigStore>()(
       autoRefresh: true,
       baseCurrency: 'EUR',
       autonomo: { nombre: '', nif: '', direccion: '', email: '', telefono: '', iban: '', logo: '', ivaDefault: 21, retencionDefault: 15, serieFacturacion: String(new Date().getFullYear()) },
+      privacyMode: true,
       setApiKey: (apiKey) => set({ apiKey }),
       setAnthropicKey: (anthropicKey) => set({ anthropicKey }),
       setFmpKey: (fmpKey) => { set({ fmpKey }); localStorage.setItem('fmp_api_key', fmpKey); },
@@ -51,6 +54,7 @@ export const useConfigStore = create<ConfigStore>()(
       setAutoRefresh: (autoRefresh) => set({ autoRefresh }),
       setBaseCurrency: (baseCurrency) => set({ baseCurrency }),
       setAutonomo: (p) => set((s) => ({ autonomo: { ...s.autonomo, ...p } })),
+      setPrivacyMode: (privacyMode) => set({ privacyMode }),
       exportData: () => {
         const data: Record<string, unknown> = {};
         for (let i = 0; i < localStorage.length; i++) {

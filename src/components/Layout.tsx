@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { BarChart3, Home, TrendingUp, Wrench, Settings, X, Bell, FileDown, FileText, MessageSquare, LogOut, Cloud, CloudOff, Loader2, CheckCircle2 } from 'lucide-react';
+import { BarChart3, Home, TrendingUp, Wrench, Settings, X, Bell, FileDown, FileText, MessageSquare, LogOut, Cloud, CloudOff, Loader2, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useSyncStore } from '../hooks/useSupabaseSync';
 import { useConfigStore } from '../stores/useConfigStore';
@@ -35,7 +35,7 @@ export default function Layout() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const alertasPanelRef = useRef<HTMLDivElement>(null);
-  const { apiKey, exchangeRateKey } = useConfigStore();
+  const { apiKey, exchangeRateKey, privacyMode, setPrivacyMode } = useConfigStore();
   const { setExchangeRates } = useMercadoStore();
   const isDemo = !apiKey;
   const { user, signOut } = useAuth();
@@ -288,6 +288,15 @@ export default function Layout() {
           {/* PDF export */}
           <button className="btn-icon" onClick={handleExportPDF} title="Exportar PDF">
             <FileDown size={16} />
+          </button>
+          {/* Privacy toggle */}
+          <button
+            className="btn-icon"
+            onClick={() => setPrivacyMode(!privacyMode)}
+            title={privacyMode ? 'Mostrar valores' : 'Ocultar valores'}
+            style={{ color: privacyMode ? 'var(--text2)' : 'var(--blue)' }}
+          >
+            {privacyMode ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
           <button className="btn-icon" onClick={() => setShowSettings(true)}>
             <Settings size={16} />
