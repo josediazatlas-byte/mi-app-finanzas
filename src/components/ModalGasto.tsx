@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { X, Sparkles } from 'lucide-react';
+import { X, Sparkles, Loader2 } from 'lucide-react';
 import { useFinanzasStore } from '../stores/useFinanzasStore';
 import type { Gasto } from '../stores/useFinanzasStore';
+import { useConfigStore } from '../stores/useConfigStore';
+import { callClaudeAPI } from '../utils/aiContext';
 import toast from 'react-hot-toast';
 
 interface Props { onClose: () => void; gasto?: Gasto; }
@@ -20,6 +22,7 @@ function suggestCategory(nombre: string): Gasto['categoria'] {
 
 export default function ModalGasto({ onClose, gasto }: Props) {
   const { addGasto, updateGasto } = useFinanzasStore();
+  const { anthropicKey } = useConfigStore();
   const isEdit = !!gasto;
   const today = new Date().toISOString().split('T')[0];
   const [form, setForm] = useState<Omit<Gasto, 'id'>>({
@@ -30,17 +33,39 @@ export default function ModalGasto({ onClose, gasto }: Props) {
     recurrente: gasto?.recurrente ?? false,
   });
   const [autoSuggested, setAutoSuggested] = useState(false);
+  const [aiCategorizando, setAiCategorizando] = useState(false);
 
   const handleNombreChange = (nombre: string) => {
     const suggested = suggestCategory(nombre);
     const newForm = { ...form, nombre };
     if (nombre.length >= 3 && !isEdit) {
       newForm.categoria = suggested;
-      setAutoSuggested(true);
+      setAutoSuggested(suggested !== 'Otros');
     } else {
       setAutoSuggested(false);
     }
     setForm(newForm);
+  };
+
+  const handleAICategorize = async () => {
+    if (!anthropicKey || !form.nombre || aiCategorizando) return;
+    setAiCategorizando(true);
+    try {
+      const response = await callClaudeAPI(
+        [{ role: 'user', content: `Clasifica este gasto en UNA sola categoría de esta lista: Vivienda, Alimentación, Transporte, Ocio, Salud, Suscripciones, Otros.\n\nGasto: "${form.nombre}"\n\nResponde SOLO con el nombre exacto de la categoría, nada más.` }],
+        'Eres un clasificador de gastos personales. Responde solo con una categoría.',
+        anthropicKey
+      );
+      const cat = response.trim() as Gasto['categoria'];
+      const valid: Gasto['categoria'][] = ['Vivienda', 'Alimentación', 'Transporte', 'Ocio', 'Salud', 'Suscripciones', 'Otros'];
+      if (valid.includes(cat)) {
+        setForm(f => ({ ...f, categoria: cat }));
+        setAutoSuggested(true);
+        toast.success(`Categoría sugerida por IA: ${cat}`);
+      }
+    } catch { /* silent */ } finally {
+      setAiCategorizando(false);
+    }
   };
 
   const handleSubmit = () => {
@@ -56,6 +81,7 @@ export default function ModalGasto({ onClose, gasto }: Props) {
   };
 
   return (
+    <>
     <div className="modal-overlay">
       <div className="modal">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -76,6 +102,17 @@ export default function ModalGasto({ onClose, gasto }: Props) {
                 <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--blue)', background: 'rgba(59,130,246,0.1)', padding: '2px 6px', borderRadius: 4 }}>
                   <Sparkles size={10} /> Auto
                 </span>
+              )}
+              {anthropicKey && form.nombre.length >= 3 && !autoSuggested && (
+                <button
+                  type="button"
+                  onClick={handleAICategorize}
+                  disabled={aiCategorizando}
+                  style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#a78bfa', background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.25)', padding: '2px 7px', borderRadius: 4, cursor: 'pointer' }}
+                >
+                  {aiCategorizando ? <Loader2 size={10} style={{ animation: 'spin 1s linear infinite' }} /> : <Sparkles size={10} />}
+                  IA
+                </button>
               )}
             </div>
             <select className="select" value={form.categoria} onChange={(e) => { setForm({ ...form, categoria: e.target.value as Gasto['categoria'] }); setAutoSuggested(false); }}>
@@ -110,5 +147,7 @@ export default function ModalGasto({ onClose, gasto }: Props) {
         </div>
       </div>
     </div>
+    <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+    </>
   );
 }

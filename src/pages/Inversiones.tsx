@@ -773,7 +773,23 @@ export default function Inversiones() {
     setAiLoading(true);
     try {
       const ctx = buildFinancialContext();
-      const prompt = 'Analiza mi cartera de inversiones en detalle. Evalúa: diversificación, concentración de riesgo, rendimiento de cada posición, y dame 3 recomendaciones concretas de mejora.';
+      const prompt = `Analiza mi cartera de inversiones en profundidad. Estructura tu respuesta así:
+
+**📊 Diversificación**
+Evalúa la distribución por activo, sector y geografía. Identifica concentraciones de riesgo.
+
+**⚖️ Comparativa por perfil de riesgo**
+Compara mi cartera actual con:
+- Perfil conservador (60% renta fija, 40% renta variable)
+- Perfil moderado (40% RF, 60% RV diversificada)
+- Perfil agresivo (100% RV, exposición a crecimiento)
+¿A cuál se parece más? ¿Es coherente con mi patrimonio total?
+
+**🔄 Rebalanceo recomendado**
+¿Qué posiciones están sobrreponderadas? ¿Qué activos o sectores faltan?
+
+**🎯 3 acciones concretas**
+Pasos específicos que debería tomar esta semana/mes.`;
       const response = await callClaudeAPI(
         [{ role: 'user', content: prompt }],
         `${SYSTEM_PROMPT}\n\nCONTEXTO FINANCIERO:\n${ctx}`,

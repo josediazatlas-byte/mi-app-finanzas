@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, TrendingUp, Search, Target, AlertTriangle, ChevronRight, Pencil, Trash2, X, Bot, RefreshCw, MessageSquare, Eye, EyeOff } from 'lucide-react';
 import { useFinanzasStore } from '../stores/useFinanzasStore';
@@ -1014,6 +1014,7 @@ export default function Inicio() {
   const { anthropicKey, privacyMode, setPrivacyMode, autonomo } = useConfigStore();
   const [aiInsights, setAiInsights] = useState<string[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
+  const aiAutoLoaded = useRef(false);
   const [fng, setFng] = useState<{ value: number; label: string; color: string } | null>(null);
 
   useEffect(() => {
@@ -1045,25 +1046,42 @@ export default function Inicio() {
   const patrimonioNeto = saldoCuentas + valorInversiones + equityInmuebles - otrasDeudas;
 
   const loadAIInsights = async () => {
-    if (!anthropicKey) { toast.error('Añade tu API key de Anthropic en Ajustes'); return; }
+    if (!anthropicKey) { toast.error('Añade tu API key de Anthropic en Ajustes → General'); return; }
     setAiLoading(true);
     try {
       const ctx = buildFinancialContext();
-      const prompt = 'Dame exactamente 3 insights financieros breves y accionables sobre mi situación actual. Formato: cada insight en una sola frase concisa empezando por un emoji relevante. Sé específico con los números.';
+      const prompt = `Analiza mis datos financieros y dame exactamente 4 insights accionables y personalizados. Cada insight debe:
+- Ser una frase concisa (máx 15 palabras) empezando con un emoji relevante
+- Basarse en números concretos de mis datos
+- Señalar algo importante o mejorable
+
+Ejemplos del estilo deseado:
+• "📈 Tu gasto en restaurantes subió 35% vs el mes pasado"
+• "⚠️ MSFT representa 26% de tu cartera, considera diversificar"
+• "💰 Con tu ahorro actual llegarás al fondo de emergencia en 2 meses"
+
+Responde SOLO con los 4 insights, uno por línea, sin numeración ni texto adicional.`;
       const response = await callClaudeAPI(
         [{ role: 'user', content: prompt }],
         `${SYSTEM_PROMPT}\n\nCONTEXTO:\n${ctx}`,
         anthropicKey
       );
-      // Parse insights: split by numbered lines or newlines
       const lines = response.split('\n').map(l => l.trim()).filter(l => l.length > 10);
-      setAiInsights(lines.slice(0, 4));
+      setAiInsights(lines.slice(0, 5));
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Error al cargar insights');
     } finally {
       setAiLoading(false);
     }
   };
+
+  // Auto-load insights once per session on mount
+  useEffect(() => {
+    if (anthropicKey && !aiAutoLoaded.current) {
+      aiAutoLoaded.current = true;
+      setTimeout(() => loadAIInsights(), 1500); // slight delay to avoid blocking render
+    }
+  }, [anthropicKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-snapshot (once per session)
   useEffect(() => {
@@ -1450,8 +1468,9 @@ export default function Inicio() {
                   const cleanInsight = insight.replace(/^[^\w]*/, '');
                   const question = `Cuéntame más sobre esto: ${cleanInsight}`;
                   window.dispatchEvent(new CustomEvent('open-chat', { detail: { question } }));
-                }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--blue)', fontSize: 11, flexShrink: 0, padding: '0 4px' }}>
-                  <MessageSquare size={13} />
+                }} style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)', borderRadius: 6, cursor: 'pointer', color: 'var(--blue)', fontSize: 11, flexShrink: 0, padding: '4px 8px', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <MessageSquare size={11} />
+                  <span className="hide-mobile">Preguntarle más</span>
                 </button>
               </div>
             ))}

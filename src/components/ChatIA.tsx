@@ -5,26 +5,34 @@ import { useConfigStore } from '../stores/useConfigStore';
 import { buildFinancialContext, SYSTEM_PROMPT, callClaudeAPI } from '../utils/aiContext';
 
 const QUICK_QUESTIONS = [
-  '¿Cómo está mi situación financiera este mes?',
-  '¿En qué categorías debería reducir gastos?',
+  '¿En qué estoy gastando demasiado?',
   '¿Está bien diversificada mi cartera?',
-  '¿Cuándo podré alcanzar mis metas financieras?',
-  '¿Cuál es mi tasa de ahorro y es suficiente?',
-  '¿Qué riesgos veo en mi cartera actual?',
+  '¿Cuándo podré ser independiente financieramente?',
+  '¿Cómo puedo reducir mis impuestos?',
+  '¿Qué hago con mi dinero libre este mes?',
 ];
 
-interface Props { onClose: () => void; }
+interface Props { onClose: () => void; initQuestion?: string; }
 
-export default function ChatIA({ onClose }: Props) {
+export default function ChatIA({ onClose, initQuestion }: Props) {
   const { messages, addMessage, clearHistory } = useChatStore();
   const { anthropicKey } = useConfigStore();
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const initSent = useRef(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
+
+  // Auto-send initQuestion once on mount
+  useEffect(() => {
+    if (initQuestion && !initSent.current) {
+      initSent.current = true;
+      send(initQuestion);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const send = async (text: string) => {
     const trimmed = text.trim();

@@ -459,6 +459,38 @@ export default function SettingsModal({ onClose }: Props) {
 
         <div style={{ height: 1, background: 'var(--border)', margin: '16px 0' }} />
 
+        {/* Anthropic / IA */}
+        <div style={{ marginBottom: 20 }}>
+          <label className="label" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+            <span style={{ fontSize: 14 }}>🤖</span> API Key Anthropic (IA)
+          </label>
+          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 8, lineHeight: 1.5 }}>
+            Activa el asesor financiero IA, insights automáticos, análisis de cartera y categorización de gastos. Modelo: claude-haiku-4-5-20251001.
+            Obtén tu clave en <strong>console.anthropic.com</strong>.
+          </div>
+          <input
+            className="input"
+            type="password"
+            value={tmpAnthropicKey}
+            onChange={e => setTmpAnthropicKey(e.target.value)}
+            placeholder="sk-ant-api03-..."
+          />
+          <button
+            className="btn-primary"
+            style={{ marginTop: 8, width: '100%', justifyContent: 'center', background: 'rgba(139,92,246,0.85)' }}
+            onClick={() => { setAnthropicKey(tmpAnthropicKey); toast.success('API Key Anthropic guardada'); }}
+          >
+            <Check size={14} /> Guardar clave Anthropic
+          </button>
+          {anthropicKey && (
+            <div style={{ marginTop: 6, fontSize: 12, color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <Check size={12} /> IA activa · Insights, asesor y categorización disponibles
+            </div>
+          )}
+        </div>
+
+        <div style={{ height: 1, background: 'var(--border)', margin: '16px 0' }} />
+
         {/* Data management */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <button className="btn-secondary" onClick={exportData} style={{ justifyContent: 'center' }}>

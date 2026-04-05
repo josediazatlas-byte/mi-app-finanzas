@@ -54,7 +54,7 @@ export const useConfigStore = create<ConfigStore>()(
       autonomo: { nombre: '', nif: '', direccion: '', email: '', telefono: '', iban: '', logo: '', ivaDefault: 21, retencionDefault: 15, serieFacturacion: String(new Date().getFullYear()) },
       privacyMode: true,
       setApiKey: (apiKey) => set({ apiKey }),
-      setAnthropicKey: (anthropicKey) => set({ anthropicKey }),
+      setAnthropicKey: (anthropicKey) => { set({ anthropicKey }); localStorage.setItem('anthropic_api_key', anthropicKey); },
       setFmpKey: (fmpKey) => { set({ fmpKey }); localStorage.setItem('fmp_api_key', fmpKey); },
       setExchangeRateKey: (exchangeRateKey) => { set({ exchangeRateKey }); localStorage.setItem('exchange_rate_api_key', exchangeRateKey); },
       setFredKey: (fredKey) => { set({ fredKey }); localStorage.setItem('fred_api_key', fredKey); },

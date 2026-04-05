@@ -47,6 +47,7 @@ export default function Layout() {
   const [showSettings, setShowSettings] = useState(false);
   const [showAlertas, setShowAlertas] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  const [chatInitQuestion, setChatInitQuestion] = useState<string | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [driveRestoreBackups, setDriveRestoreBackups] = useState<BackupEntry[] | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -108,6 +109,17 @@ export default function Layout() {
       }
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // open-chat event (fired by insights "Preguntarle más" buttons)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const question = (e as CustomEvent<{ question: string }>).detail?.question;
+      setShowChat(true);
+      if (question) setChatInitQuestion(question);
+    };
+    window.addEventListener('open-chat', handler);
+    return () => window.removeEventListener('open-chat', handler);
+  }, []);
 
   // Google Drive: auto-sync every 5 min + check restore on mount
   useEffect(() => {
@@ -488,7 +500,12 @@ export default function Layout() {
       )}
 
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
-      {showChat && <ChatIA onClose={() => setShowChat(false)} />}
+      {showChat && (
+        <ChatIA
+          onClose={() => { setShowChat(false); setChatInitQuestion(null); }}
+          initQuestion={chatInitQuestion ?? undefined}
+        />
+      )}
 
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
