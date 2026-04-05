@@ -20,6 +20,7 @@ interface ConfigStore {
   fmpKey: string;
   exchangeRateKey: string;
   fredKey: string;
+  googleClientId: string;
   autoRefresh: boolean;
   baseCurrency: 'EUR' | 'USD' | 'GBP';
   autonomo: AutonomoProfile;
@@ -29,6 +30,7 @@ interface ConfigStore {
   setFmpKey: (key: string) => void;
   setExchangeRateKey: (key: string) => void;
   setFredKey: (key: string) => void;
+  setGoogleClientId: (id: string) => void;
   setAutoRefresh: (v: boolean) => void;
   setBaseCurrency: (c: 'EUR' | 'USD' | 'GBP') => void;
   setAutonomo: (p: Partial<AutonomoProfile>) => void;
@@ -46,6 +48,7 @@ export const useConfigStore = create<ConfigStore>()(
       fmpKey: '',
       exchangeRateKey: '',
       fredKey: '',
+      googleClientId: '',
       autoRefresh: true,
       baseCurrency: 'EUR',
       autonomo: { nombre: '', nif: '', direccion: '', email: '', telefono: '', iban: '', logo: '', ivaDefault: 21, retencionDefault: 15, serieFacturacion: String(new Date().getFullYear()) },
@@ -55,6 +58,7 @@ export const useConfigStore = create<ConfigStore>()(
       setFmpKey: (fmpKey) => { set({ fmpKey }); localStorage.setItem('fmp_api_key', fmpKey); },
       setExchangeRateKey: (exchangeRateKey) => { set({ exchangeRateKey }); localStorage.setItem('exchange_rate_api_key', exchangeRateKey); },
       setFredKey: (fredKey) => { set({ fredKey }); localStorage.setItem('fred_api_key', fredKey); },
+      setGoogleClientId: (googleClientId) => set({ googleClientId }),
       setAutoRefresh: (autoRefresh) => set({ autoRefresh }),
       setBaseCurrency: (baseCurrency) => set({ baseCurrency }),
       setAutonomo: (p) => set((s) => ({ autonomo: { ...s.autonomo, ...p } })),

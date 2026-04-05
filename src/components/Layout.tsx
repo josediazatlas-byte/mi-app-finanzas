@@ -3,12 +3,19 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { BarChart3, Home, TrendingUp, Wrench, Settings, X, Bell, FileDown, FileText, MessageSquare, LogOut, Cloud, CloudOff, Loader2, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import InstallBanner from './InstallBanner';
 import OfflineBanner from './OfflineBanner';
+import DriveRestoreModal from './DriveRestoreModal';
 import {
   requestNotificationPermission,
   initNotifications,
   checkSuscripcionesAlert,
   checkPortfolioDropAlert,
 } from '../services/notifications';
+import {
+  initGoogleAuth, createBackup, listBackups,
+  computeLocalHash, isLocalDataEmpty, getToken,
+  type BackupEntry,
+} from '../services/googleDrive';
+import { useDriveStore } from '../stores/useDriveStore';
 import { useAuth } from '../hooks/useAuth';
 import { useSyncStore } from '../hooks/useSupabaseSync';
 import { useConfigStore } from '../stores/useConfigStore';
@@ -41,9 +48,15 @@ export default function Layout() {
   const [showAlertas, setShowAlertas] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [driveRestoreBackups, setDriveRestoreBackups] = useState<BackupEntry[] | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const alertasPanelRef = useRef<HTMLDivElement>(null);
-  const { apiKey, exchangeRateKey, privacyMode, setPrivacyMode } = useConfigStore();
+  const { apiKey, exchangeRateKey, privacyMode, setPrivacyMode, googleClientId } = useConfigStore();
+  const {
+    connected: driveConnected, syncStatus: driveSyncStatus,
+    setLastSync: setDriveLastSync, setSyncStatus: setDriveSyncStatus,
+    setBackupHistory, lastBackupHash, setLastBackupHash, setSyncError,
+  } = useDriveStore();
   const { setExchangeRates } = useMercadoStore();
   const isDemo = !apiKey;
   const { user, signOut } = useAuth();
@@ -95,6 +108,48 @@ export default function Layout() {
       }
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Google Drive: auto-sync every 5 min + check restore on mount
+  useEffect(() => {
+    if (!driveConnected || !googleClientId) return;
+
+    const trySync = async () => {
+      const hash = computeLocalHash();
+      if (hash === lastBackupHash) return; // no changes
+      const token = getToken();
+      if (!token) return; // wait for user to reconnect manually
+      try {
+        setDriveSyncStatus('syncing');
+        await createBackup();
+        const list = await listBackups();
+        setBackupHistory(list);
+        setDriveLastSync(new Date().toISOString());
+        setDriveSyncStatus('synced');
+        setLastBackupHash(hash);
+        setSyncError(null);
+      } catch (e) {
+        setDriveSyncStatus('error');
+        setSyncError(e instanceof Error ? e.message : 'sync error');
+      }
+    };
+
+    const checkRestore = async () => {
+      if (!isLocalDataEmpty()) return;
+      const token = getToken();
+      if (!token) return;
+      try {
+        const backups = await listBackups();
+        if (backups.length > 0) setDriveRestoreBackups(backups);
+      } catch { /* ignore */ }
+    };
+
+    // Init auth and check restore on mount
+    initGoogleAuth(googleClientId).then(() => checkRestore()).catch(() => {});
+
+    // Auto-sync interval
+    const interval = setInterval(trySync, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [driveConnected, googleClientId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-generate alerts on mount / data change
   useEffect(() => {
@@ -288,8 +343,8 @@ export default function Layout() {
               </div>
             )}
           </div>
-          {/* Sync indicator */}
-          <div title={lastSync ? `Última sync: ${new Date(lastSync).toLocaleTimeString('es-ES')}` : 'Sin sincronizar'} style={{ display: 'flex', alignItems: 'center' }}>
+          {/* Supabase sync indicator */}
+          <div title={lastSync ? `Supabase sync: ${new Date(lastSync).toLocaleTimeString('es-ES')}` : 'Sin sincronizar'} style={{ display: 'flex', alignItems: 'center' }}>
             {syncStatus === 'syncing' || syncStatus === 'loading'
               ? <Loader2 size={14} color="var(--blue)" style={{ animation: 'spin 1s linear infinite' }} />
               : syncStatus === 'error'
@@ -299,6 +354,19 @@ export default function Layout() {
               : <Cloud size={14} color="var(--text2)" />
             }
           </div>
+          {/* Google Drive sync indicator */}
+          {driveConnected && (
+            <div
+              title={driveSyncStatus === 'synced' ? 'Drive: sincronizado' : driveSyncStatus === 'syncing' ? 'Drive: sincronizando...' : driveSyncStatus === 'error' ? 'Drive: error de sincronización' : 'Drive: conectado'}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: driveSyncStatus === 'synced' ? 'var(--green)' : driveSyncStatus === 'syncing' ? 'var(--blue)' : driveSyncStatus === 'error' ? 'var(--red)' : 'var(--text2)' }}
+            >
+              {driveSyncStatus === 'syncing'
+                ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
+                : <span style={{ width: 8, height: 8, borderRadius: '50%', background: driveSyncStatus === 'synced' ? 'var(--green)' : driveSyncStatus === 'error' ? 'var(--red)' : '#4285f4', display: 'inline-block' }} />
+              }
+              <span className="hide-mobile" style={{ fontSize: 10 }}>Drive</span>
+            </div>
+          )}
           {/* Chat IA */}
           <button className="btn-icon" onClick={() => setShowChat(!showChat)} title="Asesor IA" style={{ position: 'relative' }}>
             <MessageSquare size={16} />
@@ -410,6 +478,14 @@ export default function Layout() {
 
       <InstallBanner />
       <OfflineBanner />
+
+      {driveRestoreBackups && (
+        <DriveRestoreModal
+          backups={driveRestoreBackups}
+          onClose={() => setDriveRestoreBackups(null)}
+          onRestored={() => setDriveRestoreBackups(null)}
+        />
+      )}
 
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
       {showChat && <ChatIA onClose={() => setShowChat(false)} />}

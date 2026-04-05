@@ -1,26 +1,52 @@
 import { useState } from 'react';
-import { X, Key, RefreshCw, Download, Upload, Trash2, Check, AlertCircle, Database } from 'lucide-react';
+import { X, Key, RefreshCw, Download, Upload, Trash2, Check, AlertCircle, Database, Cloud, CloudOff, ExternalLink, History, FileSpreadsheet, LogOut } from 'lucide-react';
 import { useConfigStore } from '../stores/useConfigStore';
+import { useDriveStore } from '../stores/useDriveStore';
 import { testConnection } from '../services/alphaVantage';
 import { testConnection as testExchangeRate } from '../services/exchangeRate';
 import { testFMPConnection, clearFMPCache } from '../services/financialModelingPrep';
 import { clearFredCache } from '../services/fred';
 import { clearYfCache } from '../services/yfinance';
 import { clearCnmvCache } from '../services/cnmv';
+import {
+  initGoogleAuth, requestToken, revokeToken, createBackup,
+  listBackups, getToken, exportToSheets, type SheetsExportData,
+} from '../services/googleDrive';
 import { useMercadoStore } from '../stores/useMercadoStore';
+import { useFinanzasStore } from '../stores/useFinanzasStore';
+import { useInversionesStore } from '../stores/useInversionesStore';
+import { useInmuebleStore } from '../stores/useInmuebleStore';
+import { useDeudaStore } from '../stores/useDeudaStore';
+import { useFacturasStore } from '../stores/useFacturasStore';
+import { useClientesStore } from '../stores/useClientesStore';
+import { useHistoricoStore } from '../stores/useHistoricoStore';
 import toast from 'react-hot-toast';
 
 interface Props { onClose: () => void; }
 
 export default function SettingsModal({ onClose }: Props) {
-  const { apiKey, setApiKey, anthropicKey, setAnthropicKey, fmpKey, setFmpKey, exchangeRateKey, setExchangeRateKey, fredKey, setFredKey, autoRefresh, setAutoRefresh, baseCurrency, setBaseCurrency, exportData, importData, clearAllData, autonomo, setAutonomo } = useConfigStore();
+  const { apiKey, setApiKey, anthropicKey, setAnthropicKey, fmpKey, setFmpKey, exchangeRateKey, setExchangeRateKey, fredKey, setFredKey, googleClientId, setGoogleClientId, autoRefresh, setAutoRefresh, baseCurrency, setBaseCurrency, exportData, importData, clearAllData, autonomo, setAutonomo } = useConfigStore();
   const { exchangeRates } = useMercadoStore();
+  const { connected, lastSync, backupHistory, setConnected, setSyncStatus, setLastSync, setBackupHistory, setSyncError, setLastBackupHash } = useDriveStore();
+  const { ingresos, gastos, cuentas } = useFinanzasStore();
+  const { posiciones } = useInversionesStore();
+  const { inmuebles } = useInmuebleStore();
+  const { deudas } = useDeudaStore();
+  const { facturas } = useFacturasStore();
+  const { clientes } = useClientesStore();
+  const { snapshots } = useHistoricoStore();
+  const { precios } = useMercadoStore();
+
   const [tmpKey, setTmpKey] = useState(apiKey);
   const [tmpAnthropicKey, setTmpAnthropicKey] = useState(anthropicKey);
   const [tmpFmpKey, setTmpFmpKey] = useState(fmpKey);
   const [tmpExchangeKey, setTmpExchangeKey] = useState(exchangeRateKey);
   const [tmpFredKey, setTmpFredKey] = useState(fredKey);
-  const [settingsTab, setSettingsTab] = useState<'general' | 'apis' | 'autonomo'>('general');
+  const [tmpGoogleClientId, setTmpGoogleClientId] = useState(googleClientId);
+  const [settingsTab, setSettingsTab] = useState<'general' | 'apis' | 'autonomo' | 'drive'>('general');
+  const [driveConnecting, setDriveConnecting] = useState(false);
+  const [driveBacking, setDriveBacking] = useState(false);
+  const [sheetsExporting, setSheetsExporting] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<boolean | null>(null);
   const [testingFmp, setTestingFmp] = useState(false);
@@ -69,6 +95,130 @@ export default function SettingsModal({ onClose }: Props) {
     toast.success('API Key ExchangeRate guardada');
   };
 
+  // ── Google Drive handlers ────────────────────────────────────────────
+  const handleDriveConnect = async () => {
+    if (!tmpGoogleClientId.trim()) { toast.error('Introduce tu Google Client ID primero'); return; }
+    setDriveConnecting(true);
+    try {
+      setGoogleClientId(tmpGoogleClientId.trim());
+      await initGoogleAuth(tmpGoogleClientId.trim());
+      await requestToken('select_account');
+      setConnected(true);
+      setSyncError(null);
+      // Refresh backup history
+      const list = await listBackups();
+      setBackupHistory(list);
+      toast.success('Google Drive conectado correctamente');
+    } catch (e) {
+      toast.error(`No se pudo conectar: ${e instanceof Error ? e.message : 'error'}`);
+    } finally {
+      setDriveConnecting(false);
+    }
+  };
+
+  const handleDriveDisconnect = async () => {
+    await revokeToken();
+    setConnected(false);
+    setSyncStatus('idle');
+    setLastSync(null);
+    setBackupHistory([]);
+    setLastBackupHash('');
+    setSyncError(null);
+    toast.success('Google Drive desconectado');
+  };
+
+  const handleManualBackup = async () => {
+    setDriveBacking(true);
+    try {
+      if (!getToken()) {
+        await initGoogleAuth(googleClientId);
+        await requestToken();
+      }
+      setSyncStatus('syncing');
+      const entry = await createBackup();
+      const list = await listBackups();
+      setBackupHistory(list);
+      setLastSync(new Date().toISOString());
+      setSyncStatus('synced');
+      setLastBackupHash('manual');
+      toast.success(`Copia guardada (${(entry.sizeBytes / 1024).toFixed(1)} KB)`);
+    } catch (e) {
+      setSyncStatus('error');
+      setSyncError(e instanceof Error ? e.message : 'error');
+      toast.error(`Error al guardar: ${e instanceof Error ? e.message : 'error'}`);
+    } finally {
+      setDriveBacking(false);
+    }
+  };
+
+  const handleSheetsExport = async () => {
+    setSheetsExporting(true);
+    try {
+      if (!getToken()) {
+        await initGoogleAuth(googleClientId);
+        await requestToken();
+      }
+      const year = new Date().getFullYear();
+      const movimientos = [
+        ...ingresos.filter(i => i.fecha.startsWith(String(year))).map(i => ({ fecha: i.fecha, tipo: 'Ingreso', categoria: i.categoria ?? '', descripcion: i.nombre ?? '', importe: i.importe })),
+        ...gastos.filter(g => g.fecha.startsWith(String(year))).map(g => ({ fecha: g.fecha, tipo: 'Gasto', categoria: g.categoria ?? '', descripcion: g.nombre ?? '', importe: -g.importe })),
+      ].sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+      const totalActivos = cuentas.reduce((s, c) => s + c.saldo, 0)
+        + posiciones.reduce((s, p) => { const precio = precios[p.simbolo]?.precio ?? p.precioMedio; return s + precio * p.acciones; }, 0)
+        + inmuebles.reduce((s, i) => s + i.valorActual, 0);
+      const totalPasivos = deudas.reduce((s, d) => s + d.importePendiente, 0);
+
+      const data: SheetsExportData = {
+        patrimonio: { activos: totalActivos, pasivos: totalPasivos, neto: totalActivos - totalPasivos },
+        cuentas: cuentas.map(c => ({ nombre: c.nombre, tipo: c.tipo, saldo: c.saldo, divisa: c.divisa })),
+        inversiones: posiciones.map(p => {
+          const precio = precios[p.simbolo]?.precio ?? p.precioMedio;
+          return { simbolo: p.simbolo, valor: precio * p.acciones, pnl: (precio - p.precioMedio) * p.acciones };
+        }),
+        inmuebles: inmuebles.map(i => ({ nombre: i.nombre, valorActual: i.valorActual })),
+        deudas: deudas.map(d => ({ nombre: d.nombre, saldo: d.importePendiente })),
+        movimientos,
+        posiciones: posiciones.map(p => {
+          const precio = precios[p.simbolo]?.precio ?? p.precioMedio;
+          const valor = precio * p.acciones;
+          const pnl = (precio - p.precioMedio) * p.acciones;
+          return {
+            simbolo: p.simbolo, nombre: p.nombre ?? '', tipo: p.tipo ?? '',
+            acciones: p.acciones, precioMedio: p.precioMedio, precioActual: precio,
+            valor, pnl, pnlPct: p.precioMedio ? ((precio - p.precioMedio) / p.precioMedio) * 100 : 0,
+          };
+        }),
+        inmueblesFull: inmuebles.map(i => ({
+          nombre: i.nombre, tipo: i.tipo ?? '', superficie: i.superficie ?? 0,
+          precioCompra: i.precioCompra, valorActual: i.valorActual,
+          plusvalia: i.valorActual - i.precioCompra,
+          yieldBruto: i.rentaMensualBruta ? (i.rentaMensualBruta * 12 / i.valorActual) * 100 : 0,
+        })),
+        facturas: facturas.map(f => {
+          const cliente = clientes.find(c => c.id === f.clienteId);
+          const concepto = f.conceptos?.[0]?.descripcion ?? '';
+          return {
+            numero: f.numero, fecha: f.fechaEmision, cliente: cliente?.nombreRazonSocial ?? f.clienteId,
+            concepto, base: f.baseImponible, ivaPct: f.iva,
+            ivaImporte: f.baseImponible * (f.iva / 100), total: f.total, estado: f.estado,
+          };
+        }),
+        historico: snapshots.map(s => ({
+          mes: s.fecha.slice(0, 7), activos: s.activos, pasivos: s.pasivos, patrimonio: s.patrimonio,
+        })),
+      };
+
+      const url = await exportToSheets(data);
+      toast.success('Exportado a Google Sheets');
+      window.open(url, '_blank');
+    } catch (e) {
+      toast.error(`Error al exportar: ${e instanceof Error ? e.message : 'error'}`);
+    } finally {
+      setSheetsExporting(false);
+    }
+  };
+
   const handleImport = () => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -92,10 +242,10 @@ export default function SettingsModal({ onClose }: Props) {
         </div>
 
         {/* Sub-tabs */}
-        <div style={{ display: 'flex', gap: 4, background: 'var(--bg3)', padding: 4, borderRadius: 8, marginBottom: 20 }}>
-          {(['general', 'apis', 'autonomo'] as const).map(t => (
-            <button key={t} onClick={() => setSettingsTab(t)} style={{ flex: 1, padding: '6px 0', borderRadius: 6, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 12, background: settingsTab === t ? 'var(--blue)' : 'none', color: settingsTab === t ? 'white' : 'var(--text2)' }}>
-              {t === 'general' ? '⚙️ General' : t === 'apis' ? '🔑 APIs' : '🧾 Autónomo'}
+        <div className="subtabs-container" style={{ display: 'flex', gap: 4, background: 'var(--bg3)', padding: 4, borderRadius: 8, marginBottom: 20 }}>
+          {(['general', 'apis', 'autonomo', 'drive'] as const).map(t => (
+            <button key={t} onClick={() => setSettingsTab(t)} style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 12, background: settingsTab === t ? 'var(--blue)' : 'none', color: settingsTab === t ? 'white' : 'var(--text2)', flexShrink: 0, whiteSpace: 'nowrap' }}>
+              {t === 'general' ? '⚙️ General' : t === 'apis' ? '🔑 APIs' : t === 'autonomo' ? '🧾 Autónomo' : '☁️ Drive'}
             </button>
           ))}
         </div>
@@ -339,6 +489,131 @@ export default function SettingsModal({ onClose }: Props) {
 
         </div>
         )}
+        {settingsTab === 'drive' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+            {/* Status header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: connected ? 'rgba(34,197,94,0.08)' : 'var(--bg3)', border: `1px solid ${connected ? 'rgba(34,197,94,0.3)' : 'var(--border)'}`, borderRadius: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(66,133,244,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {connected ? <Cloud size={20} color="#4285f4" /> : <CloudOff size={20} color="var(--text2)" />}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>{connected ? 'Google Drive conectado' : 'Google Drive no conectado'}</div>
+                {connected && lastSync && <div style={{ fontSize: 12, color: 'var(--text2)' }}>Última copia: {new Date(lastSync).toLocaleString('es-ES')}</div>}
+                {!connected && <div style={{ fontSize: 12, color: 'var(--text2)' }}>Backup automático desactivado</div>}
+              </div>
+              {connected && (
+                <button onClick={handleDriveDisconnect} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color: 'var(--text2)', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                  <LogOut size={12} /> Desconectar
+                </button>
+              )}
+            </div>
+
+            {/* Client ID config */}
+            {!connected && (
+              <div>
+                <label className="label" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  <Key size={12} /> Google OAuth2 Client ID
+                </label>
+                <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 8, lineHeight: 1.5 }}>
+                  Crea un proyecto en <strong>console.cloud.google.com</strong>, activa Drive API + Sheets API, crea credenciales OAuth2 (Web) y añade tu dominio como origen autorizado.
+                </div>
+                <input
+                  className="input"
+                  value={tmpGoogleClientId}
+                  onChange={e => setTmpGoogleClientId(e.target.value)}
+                  placeholder="xxxxx.apps.googleusercontent.com"
+                />
+                <button
+                  className="btn-primary"
+                  style={{ marginTop: 10, width: '100%', justifyContent: 'center', background: '#4285f4' }}
+                  onClick={handleDriveConnect}
+                  disabled={driveConnecting || !tmpGoogleClientId.trim()}
+                >
+                  {driveConnecting
+                    ? <><RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> Conectando...</>
+                    : <><Cloud size={14} /> Conectar con Google Drive</>
+                  }
+                </button>
+              </div>
+            )}
+
+            {/* Connected actions */}
+            {connected && (
+              <>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    className="btn-secondary"
+                    style={{ flex: 1, justifyContent: 'center' }}
+                    onClick={handleManualBackup}
+                    disabled={driveBacking}
+                  >
+                    {driveBacking
+                      ? <><RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> Guardando...</>
+                      : <><Cloud size={14} /> Guardar ahora</>
+                    }
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    style={{ flex: 1, justifyContent: 'center', gap: 6 }}
+                    onClick={handleSheetsExport}
+                    disabled={sheetsExporting}
+                  >
+                    {sheetsExporting
+                      ? <><RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> Exportando...</>
+                      : <><FileSpreadsheet size={14} /> Google Sheets</>
+                    }
+                  </button>
+                </div>
+
+                <div style={{ fontSize: 12, color: 'var(--text2)', background: 'var(--bg3)', borderRadius: 8, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <RefreshCw size={11} />
+                  Auto-backup cada 5 min si hay cambios · Se conservan las últimas 10 copias
+                </div>
+
+                {/* Backup history */}
+                {backupHistory.length > 0 && (
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                      <History size={13} color="var(--text2)" />
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>Historial de copias ({backupHistory.length})</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {backupHistory.map((b, i) => (
+                        <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--bg3)', borderRadius: 8 }}>
+                          <div style={{ width: 6, height: 6, borderRadius: '50%', background: i === 0 ? 'var(--green)' : 'var(--text2)', flexShrink: 0 }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12, fontWeight: i === 0 ? 600 : 400 }}>
+                              {new Date(b.modifiedAt).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              {i === 0 && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--green)', fontWeight: 600 }}>ÚLTIMA</span>}
+                            </div>
+                          </div>
+                          <span style={{ fontSize: 11, color: 'var(--text2)', flexShrink: 0 }}>
+                            {b.sizeBytes < 1024 ? `${b.sizeBytes} B` : `${(b.sizeBytes / 1024).toFixed(1)} KB`}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Sheets info */}
+                <div style={{ background: 'rgba(52,168,83,0.08)', border: '1px solid rgba(52,168,83,0.25)', borderRadius: 10, padding: '12px 14px' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <FileSpreadsheet size={14} color="#34a853" /> Google Sheets — 6 pestañas
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.6 }}>
+                    Resumen patrimonio · Movimientos del año · Cartera inversiones · Inmuebles · Facturas emitidas · Histórico patrimonio mensual
+                  </div>
+                  <button className="btn-secondary" style={{ marginTop: 10, fontSize: 12, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => window.open('https://sheets.google.com', '_blank')}>
+                    <ExternalLink size={12} /> Abrir Google Sheets
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       </div>
     </div>
