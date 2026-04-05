@@ -689,7 +689,7 @@ export default function Inversiones() {
   }, []);
 
   const getPrice = (p: Posicion): number => {
-    if (p.tipo === 'Fondo Indexado') return p.vl ?? p.precioMedio ?? 0;
+    if (p.tipo === 'Fondo Indexado') return p.vl || p.precioMedio || 0;
     const cached = precios[p.simbolo];
     const mock = MOCK_TICKERS.find(t => t.symbol === p.simbolo);
     return cached?.precio ?? mock?.price ?? p.precioMedio ?? 0;
@@ -807,6 +807,7 @@ export default function Inversiones() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, background: 'var(--bg2)', padding: 4, borderRadius: 10, border: '1px solid var(--border)' }}>
         {(['cartera', 'seguimiento', 'rebalanceo', 'dividendos', 'analisis'] as const).map(t => (

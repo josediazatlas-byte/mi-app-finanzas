@@ -17,6 +17,36 @@ const MOCK_PRICES: Record<string, { price: number; change: number; name: string 
   BTC: { price: 87500, change: 2.30, name: 'Bitcoin' },
   ETH: { price: 3850, change: 1.75, name: 'Ethereum' },
   GLD: { price: 225.80, change: 0.35, name: 'SPDR Gold Shares' },
+  // Ibex 35 (Spain)
+  'SAN.MC': { price: 4.85, change: 0.62, name: 'Banco Santander' },
+  'BBVA.MC': { price: 10.20, change: 0.95, name: 'BBVA' },
+  'ITX.MC': { price: 50.20, change: 1.15, name: 'Inditex' },
+  'TEF.MC': { price: 4.12, change: -0.30, name: 'Telefónica' },
+  'REP.MC': { price: 14.30, change: 0.45, name: 'Repsol' },
+  'IBE.MC': { price: 13.85, change: 0.20, name: 'Iberdrola' },
+  'ACS.MC': { price: 42.10, change: 0.75, name: 'ACS' },
+  'CABK.MC': { price: 5.80, change: 0.88, name: 'CaixaBank' },
+  'MAP.MC': { price: 3.15, change: 0.35, name: 'MAPFRE' },
+  'ELE.MC': { price: 21.50, change: -0.15, name: 'Endesa' },
+  // Euronext Paris
+  'MC.PA': { price: 680.50, change: 1.25, name: 'LVMH' },
+  'OR.PA': { price: 415.30, change: 0.85, name: "L'Oréal" },
+  'TTE.PA': { price: 58.20, change: -0.35, name: 'TotalEnergies' },
+  'BNP.PA': { price: 72.40, change: 0.55, name: 'BNP Paribas' },
+  'AIR.PA': { price: 168.90, change: 1.80, name: 'Airbus' },
+  // Xetra (Germany)
+  'SAP.DE': { price: 225.80, change: 1.10, name: 'SAP SE' },
+  'SIE.DE': { price: 185.40, change: 0.65, name: 'Siemens AG' },
+  'ALV.DE': { price: 280.60, change: 0.45, name: 'Allianz SE' },
+  'ADS.DE': { price: 215.90, change: 2.10, name: 'Adidas AG' },
+  'BMW.DE': { price: 78.50, change: -0.80, name: 'BMW' },
+  'VOW3.DE': { price: 95.20, change: -0.60, name: 'Volkswagen' },
+  // London Stock Exchange
+  'HSBA.L': { price: 780.50, change: 0.40, name: 'HSBC Holdings' },
+  'BP.L': { price: 438.20, change: -0.55, name: 'BP' },
+  'SHEL.L': { price: 2680.00, change: 0.30, name: 'Shell' },
+  'AZN.L': { price: 11200.00, change: 1.20, name: 'AstraZeneca' },
+  'ULVR.L': { price: 3850.00, change: 0.15, name: 'Unilever' },
 };
 
 function getApiKey(): string {

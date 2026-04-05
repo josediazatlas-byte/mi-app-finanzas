@@ -8,7 +8,7 @@ import { useInmuebleStore } from '../stores/useInmuebleStore';
 import { useDeudaStore } from '../stores/useDeudaStore';
 import { useConfigStore } from '../stores/useConfigStore';
 import { getQuote, MOCK_TICKERS } from '../services/alphaVantage';
-import { isCryptoSymbol } from '../services/coinGecko';
+import { cgGetPrices, symbolToId, isCryptoSymbol } from '../services/coinGecko';
 import { getCompanyProfile, getKeyMetrics, getRatings, getPriceTarget, type CompanyProfile, type KeyMetrics, type Rating, type PriceTarget } from '../services/financialModelingPrep';
 import { fmtEur, toEur, USD_TO_EUR } from '../utils/format';
 import { calcScoreCartera } from '../utils/scoreCartera';
@@ -96,7 +96,7 @@ export default function Analisis() {
 
   // Price helper: fondos use VL, never Alpha Vantage
   const getPriceOf = (p: typeof posiciones[0]): number => {
-    if (p.tipo === 'Fondo Indexado') return p.vl ?? p.precioMedio ?? 0;
+    if (p.tipo === 'Fondo Indexado') return p.vl || p.precioMedio || 0;
     const cached = precios[p.simbolo];
     const mock = MOCK_TICKERS.find(t => t.symbol === p.simbolo);
     return cached?.precio ?? mock?.price ?? p.precioMedio ?? 0;
@@ -108,14 +108,28 @@ export default function Analisis() {
     return cached?.variacion ?? mock?.change ?? 0;
   };
 
-  // Refresh: skip fondos indexados and crypto handled elsewhere
+  // Refresh: stocks via Alpha Vantage + crypto via CoinGecko
   const refresh = async () => {
     setRefreshing(true);
-    const tradeable = posiciones.filter(p => p.tipo !== 'Fondo Indexado' && !isCryptoSymbol(p.simbolo) && p.tipo !== 'Crypto');
-    await Promise.all(tradeable.map(async (p) => {
+    const cryptoPos = posiciones.filter(p => p.tipo === 'Crypto' || isCryptoSymbol(p.simbolo));
+    const stockPos = posiciones.filter(p => p.tipo !== 'Fondo Indexado' && p.tipo !== 'Crypto' && !isCryptoSymbol(p.simbolo));
+    await Promise.all(stockPos.map(async (p) => {
       const q = await getQuote(p.simbolo);
       if (q) setPrice(p.simbolo, q.price, q.change);
     }));
+    if (cryptoPos.length > 0) {
+      try {
+        const coinIds = cryptoPos.map(p => symbolToId(p.simbolo));
+        const prices = await cgGetPrices(coinIds);
+        cryptoPos.forEach(p => {
+          const data = prices[symbolToId(p.simbolo)];
+          if (data) {
+            const priceInDivisa = p.divisa === 'EUR' ? data.eur : data.usd ?? data.eur / 0.92;
+            setPrice(p.simbolo, priceInDivisa, data.eur_24h_change ?? 0);
+          }
+        });
+      } catch { /* keep cached prices */ }
+    }
     setRefreshing(false);
   };
 

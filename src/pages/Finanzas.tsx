@@ -28,14 +28,17 @@ function getMonthKey(year: number, month: number) {
   return `${year}-${String(month + 1).padStart(2, '0')}`;
 }
 
-function buildLast6Months(ingresos: Ingreso[], gastos: Gasto[]) {
+function buildLast6Months(ingresos: Ingreso[], gastos: Gasto[], inmuebles: Inmueble[] = []) {
   const now = new Date();
+  const rentalMensual = inmuebles
+    .filter(inm => inm.generaRenta && inm.rentaMensualBruta > 0)
+    .reduce((s, inm) => s + inm.rentaMensualBruta, 0);
   return Array.from({ length: 6 }, (_, i) => {
     const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
     const key = getMonthKey(d.getFullYear(), d.getMonth());
     const ing = ingresos.filter(x => x.fecha.startsWith(key)).reduce((s, x) => s + x.importe, 0);
     const gas = gastos.filter(x => x.fecha.startsWith(key)).reduce((s, x) => s + x.importe, 0);
-    return { mes: MESES[d.getMonth()].slice(0, 3), ingresos: ing, gastos: gas };
+    return { mes: MESES[d.getMonth()].slice(0, 3), ingresos: ing + rentalMensual, gastos: gas };
   });
 }
 
@@ -1908,7 +1911,7 @@ export default function Finanzas() {
   const totalIng = allIngMes.reduce((s, i) => s + i.importe, 0);
   const totalGas = allGasMes.reduce((s, g) => s + g.importe, 0);
   const ahorro = totalIng - totalGas;
-  const chartData = buildLast6Months(ingresos, gastos);
+  const chartData = buildLast6Months(ingresos, gastos, inmuebles);
   const tituloMes = `${MESES_ES[month]} ${year}`;
 
   const prevM = month === 0 ? 11 : month - 1;
