@@ -18,6 +18,7 @@ import { MOCK_TICKERS } from '../services/alphaVantage';
 import { buildFinancialContext, callClaudeAPI, SYSTEM_PROMPT } from '../utils/aiContext';
 import { getFearAndGreed } from '../services/financialModelingPrep';
 import FondoEmergenciaWidget from '../components/FondoEmergencia';
+import { useFondoEmergenciaStore } from '../stores/useFondoEmergenciaStore';
 import ModalIngreso from '../components/ModalIngreso';
 import ModalGasto from '../components/ModalGasto';
 import ModalAddPosicion from '../components/ModalAddPosicion';
@@ -641,8 +642,12 @@ function ModalMeta({ meta, onClose }: { meta?: Meta | null; onClose: () => void 
 
 function SectionMetas() {
   const { metas, removeMeta, aportarMeta } = useMetasStore();
-  const { addGasto } = useFinanzasStore();
+  const { addGasto, cuentas } = useFinanzasStore();
   const { privacyMode } = useConfigStore();
+  const { saldoManual: fondoSaldo, cuentaVinculadaId: fondoCuentaId, objetivoActual: fondoObjetivo } = useFondoEmergenciaStore();
+  const cuentaFondo = fondoCuentaId ? cuentas.find(c => c.id === fondoCuentaId) : null;
+  const saldoFondo = cuentaFondo ? toEur(cuentaFondo.saldo, cuentaFondo.divisa) : fondoSaldo;
+  const pctFondo = fondoObjetivo > 0 ? Math.min((saldoFondo / fondoObjetivo) * 100, 100) : 0;
   const fmtMeta = (v: number) => privacyMode ? '••••••• €' : fmtEur(v);
   const [showModal, setShowModal] = useState(false);
   const [editMeta, setEditMeta] = useState<Meta | null>(null);
@@ -704,6 +709,40 @@ function SectionMetas() {
             <div style={{ fontWeight: 700, color: item.color }}>{item.val}</div>
           </div>
         ))}
+      </div>
+
+      {/* Fondo de Emergencia — meta especial pinned */}
+      <div style={{ background: 'linear-gradient(135deg, rgba(245,158,11,0.08) 0%, rgba(234,88,12,0.05) 100%)', borderRadius: 10, padding: '12px 14px', borderLeft: '3px solid var(--amber)', marginBottom: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 20 }}>🛡️</span>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>Fondo de Emergencia</div>
+              <div style={{ fontSize: 11, color: 'var(--text2)' }}>Meta especial · auto-calculada</div>
+            </div>
+            <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 10, background: 'rgba(245,158,11,0.15)', color: 'var(--amber)', fontWeight: 600 }}>P0 Prioritaria</span>
+          </div>
+          <a href="/inicio" onClick={e => { e.preventDefault(); document.querySelector<HTMLElement>('[data-fondo-widget]')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ fontSize: 11, color: 'var(--amber)', textDecoration: 'none', padding: '4px 10px', background: 'rgba(245,158,11,0.1)', borderRadius: 6 }}>Ver detalle →</a>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+          <div style={{ flex: 1, height: 8, background: 'var(--bg2)', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${pctFondo}%`, background: pctFondo >= 100 ? 'var(--green)' : 'var(--amber)', borderRadius: 4, transition: 'width 0.6s ease' }} />
+          </div>
+          <span style={{ fontSize: 12, fontWeight: 700, minWidth: 40, color: pctFondo >= 100 ? 'var(--green)' : 'var(--amber)' }}>{pctFondo.toFixed(0)}%</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
+          <div style={{ fontSize: 11 }}><span style={{ color: 'var(--text2)' }}>Ahorrado: </span><span style={{ fontWeight: 600, color: 'var(--green)' }}>{fmtMeta(saldoFondo)}</span></div>
+          <div style={{ fontSize: 11 }}><span style={{ color: 'var(--text2)' }}>Objetivo: </span><span style={{ fontWeight: 600 }}>{fmtMeta(fondoObjetivo)}</span></div>
+          <div style={{ fontSize: 11 }}><span style={{ color: 'var(--text2)' }}>Falta: </span><span style={{ fontWeight: 600 }}>{fmtMeta(Math.max(0, fondoObjetivo - saldoFondo))}</span></div>
+          <div style={{ fontSize: 11 }}>
+            {pctFondo >= 100
+              ? <span style={{ color: 'var(--green)', fontWeight: 600 }}>✅ Completado</span>
+              : fondoObjetivo === 0
+                ? <span style={{ color: 'var(--text2)', fontWeight: 600 }}>⚙️ Configurar</span>
+                : <span style={{ color: 'var(--amber)', fontWeight: 600 }}>🟡 En progreso</span>
+            }
+          </div>
+        </div>
       </div>
 
       {metas.length === 0 && (
@@ -914,15 +953,12 @@ export default function Inicio() {
     if (h >= 12 && h < 20) return 'Buenas tardes';
     return 'Buenas noches';
   };
-  const DIAS_ES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
   const nombreUsuario = autonomo.nombre ? autonomo.nombre.split(' ')[0] : '';
   const greetingText = `${getGreeting()}${nombreUsuario ? `, ${nombreUsuario}` : ''}`;
-  const diaStr = DIAS_ES[new Date().getDay()];
-  const fechaCompleta = `${new Date().getDate()} de ${MESES_ES[new Date().getMonth()]} de ${new Date().getFullYear()}`;
   const variacionTexto = variacionDia === 0
     ? 'Tu cartera no ha variado hoy'
     : `Tu cartera ha variado ${variacionDia >= 0 ? '+' : ''}${fmtEur(variacionDia)} hoy`;
-  const resumenDia = `Hoy es ${diaStr}. ${privacyMode ? 'Los valores están ocultos.' : variacionTexto}.`;
+  void variacionTexto;
 
   const liquidezPct = patrimonioNeto > 0 ? (saldoCuentas / patrimonioNeto) * 100 : 0;
   const progreso = Math.min((patrimonioNeto / objetivoFinanciero) * 100, 100);

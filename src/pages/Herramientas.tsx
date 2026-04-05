@@ -5,6 +5,7 @@ import { useInversionesStore } from '../stores/useInversionesStore';
 import { useMercadoStore } from '../stores/useMercadoStore';
 import { useInmuebleStore } from '../stores/useInmuebleStore';
 import { useDeudaStore } from '../stores/useDeudaStore';
+import { useFondoEmergenciaStore } from '../stores/useFondoEmergenciaStore';
 import { toEur } from '../utils/format';
 import { MOCK_TICKERS } from '../services/alphaVantage';
 import { getAllRates, FALLBACK_RATES } from '../services/exchangeRate';
@@ -285,6 +286,7 @@ function SimuladorFIRE() {
   const precios = useMercadoStore(s => s.precios);
   const { inmuebles } = useInmuebleStore();
   const { deudas } = useDeudaStore();
+  const { saldoManual: fondoSaldoManual, cuentaVinculadaId: fondoCuentaId, objetivoActual: fondoObjetivo } = useFondoEmergenciaStore();
 
   const saldoCuentas = cuentas.reduce((s, c) => s + toEur(c.saldo, c.divisa), 0);
   const valorInversiones = posiciones.reduce((sum, p) => {
@@ -299,7 +301,10 @@ function SimuladorFIRE() {
     const gastos = (i.gastosIbiMes + i.gastosComunidad + i.gastosSeguro + i.gastosMantenimiento + i.gastosOtros);
     return s + i.rentaMensualBruta - gastos;
   }, 0);
+  const cuentaFondo = fondoCuentaId ? cuentas.find(c => c.id === fondoCuentaId) : null;
+  const saldoFondo = cuentaFondo ? toEur(cuentaFondo.saldo, cuentaFondo.divisa) : fondoSaldoManual;
   const capitalActual = saldoCuentas + valorInversiones + equityInmuebles;
+  const capitalInvertible = Math.max(0, capitalActual - saldoFondo);
 
   const [edadActual, setEdadActual] = useState(35);
   const [edadObjetivo, setEdadObjetivo] = useState(50);
@@ -309,7 +314,7 @@ function SimuladorFIRE() {
   const [rentabilidad, setRentabilidad] = useState(7);
   const [aportacionMes, setAportacionMes] = useState(800);
   const [pensionSS, setPensionSS] = useState(600);
-  const [capitalManual, setCapitalManual] = useState(capitalActual);
+  const [capitalManual, setCapitalManual] = useState(capitalInvertible);
 
   const rentasAnuales = rentasMensuales * 12;
 
@@ -395,7 +400,7 @@ function SimuladorFIRE() {
       {/* Header */}
       <div className="card" style={{ background: 'linear-gradient(135deg, #1e1e2e 0%, #161618 100%)', border: '1px solid #2a2a42' }}>
         <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 4 }}>Datos autocargados de tus cuentas</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: 12 }}>
           {[
             { label: 'Liquidez', val: fmtEur(saldoCuentas) },
             { label: 'Cartera inversiones', val: fmtEur(valorInversiones) },
@@ -407,6 +412,11 @@ function SimuladorFIRE() {
               <div style={{ fontWeight: 700, fontSize: 15 }}>{item.val}</div>
             </div>
           ))}
+          <div>
+            <div style={{ fontSize: 11, color: 'var(--text2)' }}>🛡️ Fondo emergencia</div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: saldoFondo >= fondoObjetivo && fondoObjetivo > 0 ? 'var(--green)' : 'var(--amber)' }}>{fmtEur(saldoFondo)}</div>
+            <div style={{ fontSize: 10, color: 'var(--text2)' }}>objetivo {fmtEur(fondoObjetivo)} · descontado</div>
+          </div>
         </div>
       </div>
 
@@ -428,7 +438,7 @@ function SimuladorFIRE() {
               <div>
                 <label className="label" style={{ fontSize: 11 }}>Capital actual (€)</label>
                 <input className="input" type="number" value={Math.round(capitalManual)} onChange={e => setCapitalManual(+e.target.value)} style={{ fontSize: 13 }} />
-                <div style={{ fontSize: 10, color: 'var(--text2)', marginTop: 3 }}>Auto: {fmtEur(capitalActual)} · editable</div>
+                <div style={{ fontSize: 10, color: 'var(--text2)', marginTop: 3 }}>Total: {fmtEur(capitalActual)} − fondo {fmtEur(saldoFondo)} = {fmtEur(capitalInvertible)} · editable</div>
               </div>
               <Slider label="Aportación mensual" value={aportacionMes} min={0} max={5000} step={50} onChange={setAportacionMes} unit=" €" />
               <Slider label="Rentabilidad esperada" value={rentabilidad} min={1} max={15} step={0.5} onChange={setRentabilidad} unit="%" />
