@@ -1,6 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { BarChart3, Home, TrendingUp, Wrench, Settings, X, Bell, FileDown, FileText, MessageSquare, LogOut, Cloud, CloudOff, Loader2, CheckCircle2, Eye, EyeOff } from 'lucide-react';
+import InstallBanner from './InstallBanner';
+import OfflineBanner from './OfflineBanner';
+import {
+  requestNotificationPermission,
+  initNotifications,
+  checkSuscripcionesAlert,
+  checkPortfolioDropAlert,
+} from '../services/notifications';
 import { useAuth } from '../hooks/useAuth';
 import { useSyncStore } from '../hooks/useSupabaseSync';
 import { useConfigStore } from '../stores/useConfigStore';
@@ -76,6 +84,17 @@ export default function Layout() {
       });
     }).catch(() => { /* keep fallback rates */ });
   }, [exchangeRateKey]);
+
+  // Init notifications once on mount
+  useEffect(() => {
+    requestNotificationPermission().then(perm => {
+      if (perm === 'granted') {
+        initNotifications();
+        checkSuscripcionesAlert(suscripciones);
+        checkPortfolioDropAlert(posiciones, precios);
+      }
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-generate alerts on mount / data change
   useEffect(() => {
@@ -388,6 +407,9 @@ export default function Layout() {
           </NavLink>
         ))}
       </nav>
+
+      <InstallBanner />
+      <OfflineBanner />
 
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
       {showChat && <ChatIA onClose={() => setShowChat(false)} />}
