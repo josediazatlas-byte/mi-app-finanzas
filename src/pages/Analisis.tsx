@@ -680,8 +680,8 @@ export default function Analisis() {
               {selectedIndices.some(s => backtestData[s]) && (
                 <div className="card">
                   <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Métricas comparativas</div>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <div className="table-scroll">
+                    <table className="backtest-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                       <thead>
                         <tr style={{ color: 'var(--text2)', borderBottom: '1px solid var(--border)' }}>
                           {['Índice', 'Retorno total', 'CAGR', 'Max Drawdown', 'Volatilidad', 'Sharpe'].map(h => (

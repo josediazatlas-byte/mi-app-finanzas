@@ -1,0 +1,302 @@
+/* ══════════════════════════════════════════════
+   RESPONSIVE — Mobile First (375px → 1280px)
+   ══════════════════════════════════════════════ */
+
+/* ── Safe area + bottom nav space ── */
+:root {
+  --bottom-nav-h: 0px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (max-width: 768px) {
+  :root { --bottom-nav-h: 64px; }
+}
+
+/* ── Main content padding for bottom nav ── */
+main { padding-bottom: calc(var(--bottom-nav-h) + 8px) !important; }
+
+/* ══════════════════════════════════════════
+   HEADER — Mobile compact
+   ══════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .header-app-name { display: none; }
+  .header-nav      { display: none !important; }
+  .header-demo-badge { display: none; }
+  .header-pdf-btn  { display: none; }
+  .header-user-menu { display: none; }
+  /* keep: logo, bell, privacy, settings, logout, sync dot */
+}
+
+/* ══════════════════════════════════════════
+   BOTTOM NAVIGATION
+   ══════════════════════════════════════════ */
+.bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 200;
+  background: var(--bg2);
+  border-top: 1px solid var(--border);
+  padding: 0 0 var(--safe-bottom);
+  height: calc(var(--bottom-nav-h) + var(--safe-bottom));
+}
+@media (max-width: 768px) {
+  .bottom-nav { display: flex; }
+}
+.bottom-nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 8px 4px;
+  min-height: 48px;
+  text-decoration: none;
+  color: var(--text2);
+  font-size: 10px;
+  font-weight: 500;
+  border: none;
+  background: none;
+  cursor: pointer;
+  transition: color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  position: relative;
+}
+.bottom-nav-item.active { color: var(--blue); }
+.bottom-nav-item.active svg { color: var(--blue); }
+.bottom-nav-item .nav-dot {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%) translateX(10px);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--red);
+}
+
+/* ══════════════════════════════════════════
+   MODALS → BOTTOM SHEETS on mobile
+   ══════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .modal-overlay {
+    align-items: flex-end !important;
+    padding: 0 !important;
+    justify-content: stretch !important;
+  }
+  .modal {
+    border-radius: 20px 20px 0 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: 90svh !important;
+    padding: 8px 20px 24px !important;
+    animation: sheet-slide-up 0.28s cubic-bezier(0.32,0.72,0,1);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Handle bar */
+  .modal::before {
+    content: '';
+    display: block;
+    width: 36px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 0 auto 16px;
+  }
+  /* Inputs — prevent iOS zoom (must be ≥16px) */
+  .modal input,
+  .modal select,
+  .modal textarea {
+    font-size: 16px !important;
+  }
+}
+@keyframes sheet-slide-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+/* ══════════════════════════════════════════
+   TYPOGRAPHY & TOUCH TARGETS
+   ══════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* Minimum font-size */
+  .card { font-size: 14px; padding: 16px; }
+  .label { font-size: 12px; }
+
+  /* Inputs — 16px prevents iOS zoom */
+  input.input, select.select, textarea.input {
+    font-size: 16px !important;
+  }
+
+  /* Touch targets ≥44px */
+  .btn-primary, .btn-secondary {
+    min-height: 44px;
+    padding: 10px 16px;
+  }
+  .btn-icon {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 10px;
+  }
+}
+
+/* ══════════════════════════════════════════
+   GRID UTILITIES — Stack on mobile
+   ══════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* 2+ column grids → single column */
+  .mobile-col-1 {
+    grid-template-columns: 1fr !important;
+  }
+  /* 2 columns max on mobile */
+  .mobile-col-2 {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  /* Flex row → column */
+  .mobile-stack {
+    flex-direction: column !important;
+  }
+  /* Full width */
+  .mobile-full {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+/* ══════════════════════════════════════════
+   TABLES — Horizontal scroll
+   ══════════════════════════════════════════ */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+@media (max-width: 768px) {
+  .table-scroll {
+    margin: 0 -16px;
+    padding: 0 16px;
+  }
+  /* Prevent horizontal overflow on page */
+  body { overflow-x: hidden; }
+}
+
+/* ══════════════════════════════════════════
+   TABS — Horizontal scroll on mobile
+   ══════════════════════════════════════════ */
+.tabs-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.tabs-scroll::-webkit-scrollbar { display: none; }
+
+/* ══════════════════════════════════════════
+   CHARTS — Responsive height
+   ══════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .recharts-responsive-container {
+    min-height: 160px;
+  }
+}
+
+/* ══════════════════════════════════════════
+   SPECIFIC PAGE OVERRIDES
+   ══════════════════════════════════════════ */
+
+/* Dashboard — Patrimonio hero */
+@media (max-width: 768px) {
+  .patrimonio-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+  }
+  .patrimonio-main {
+    font-size: 28px !important;
+  }
+  .hero-grid-4 {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .hero-grid-3 {
+    grid-template-columns: 1fr !important;
+  }
+  .quick-actions-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+/* Inversiones — Position rows */
+@media (max-width: 768px) {
+  .pos-row {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    padding: 12px 14px !important;
+  }
+  .pos-row-price,
+  .pos-row-pnl {
+    min-width: 0 !important;
+    flex: 1 1 40% !important;
+  }
+  .pos-row-actions {
+    width: 100% !important;
+    justify-content: flex-end !important;
+  }
+  /* Sub-tabs scroll */
+  .subtabs-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap !important;
+  }
+  .subtabs-container::-webkit-scrollbar { display: none; }
+}
+
+/* Finanzas — Month nav */
+@media (max-width: 768px) {
+  .mes-nav {
+    padding: 10px 16px !important;
+  }
+  .mes-nav button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* Análisis — Backtest metrics table */
+@media (max-width: 768px) {
+  .backtest-table {
+    font-size: 11px;
+  }
+  .backtest-table td,
+  .backtest-table th {
+    padding: 6px 6px !important;
+  }
+}
+
+/* Settings modal — wider on mobile */
+@media (max-width: 768px) {
+  .modal.settings-modal {
+    max-height: 95svh !important;
+  }
+}
+
+/* ══════════════════════════════════════════
+   UTILITY: hide/show per breakpoint
+   ══════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .hide-mobile  { display: none !important; }
+  .show-mobile  { display: block !important; }
+  .show-mobile-flex { display: flex !important; }
+}
+@media (min-width: 769px) {
+  .show-mobile       { display: none !important; }
+  .show-mobile-flex  { display: none !important; }
+  .bottom-nav        { display: none !important; }
+}
+
+/* ══════════════════════════════════════════
+   SCROLLBAR hidden on mobile
+   ══════════════════════════════════════════ */
+@media (max-width: 768px) {
+  ::-webkit-scrollbar { width: 0; height: 0; }
+}

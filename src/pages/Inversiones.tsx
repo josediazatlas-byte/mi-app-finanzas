@@ -874,9 +874,9 @@ export default function Inversiones() {
 
           {/* Sub-tabs */}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <div style={{ display: 'flex', gap: 4, flex: 1 }}>
+            <div className="subtabs-container" style={{ display: 'flex', gap: 4, flex: 1 }}>
               {TIPOS.map(t => (
-                <button key={t} onClick={() => setSubTab(t)} style={{ padding: '6px 14px', borderRadius: 20, border: '1px solid var(--border)', background: subTab === t ? 'var(--blue)' : 'var(--bg2)', color: subTab === t ? 'white' : 'var(--text2)', fontSize: 13, cursor: 'pointer', fontWeight: subTab === t ? 600 : 400 }}>
+                <button key={t} onClick={() => setSubTab(t)} style={{ padding: '6px 14px', borderRadius: 20, border: '1px solid var(--border)', background: subTab === t ? 'var(--blue)' : 'var(--bg2)', color: subTab === t ? 'white' : 'var(--text2)', fontSize: 13, cursor: 'pointer', fontWeight: subTab === t ? 600 : 400, flexShrink: 0 }}>
                   {t} <span style={{ opacity: .7 }}>({byTipo(t).length})</span>
                 </button>
               ))}
@@ -914,7 +914,7 @@ export default function Inversiones() {
                 const pnlPosP = p.precioMedio ? ((precio - p.precioMedio) / p.precioMedio) * 100 : 0;
                 const peso = valorTotal > 0 ? (valorPos / valorTotal) * 100 : 0;
                 return (
-                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px', borderBottom: i < byTipo(subTab).length - 1 ? '1px solid var(--border)' : 'none' }}>
+                  <div key={p.id} className="pos-row" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px', borderBottom: i < byTipo(subTab).length - 1 ? '1px solid var(--border)' : 'none' }}>
                     {/* Avatar */}
                     <div style={{ width: 40, height: 40, borderRadius: 10, background: `${COLORS[i % COLORS.length]}22`, border: `1px solid ${COLORS[i % COLORS.length]}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, color: COLORS[i % COLORS.length], flexShrink: 0 }}>
                       {p.tipo === 'Fondo Indexado' ? p.nombre.slice(0, 2).toUpperCase() : p.simbolo.slice(0, 2)}
@@ -939,7 +939,7 @@ export default function Inversiones() {
                       </div>
                     </div>
                     {/* Price */}
-                    <div style={{ textAlign: 'right', minWidth: 90 }}>
+                    <div className="pos-row-price" style={{ textAlign: 'right', minWidth: 90 }}>
                       {p.tipo === 'Fondo Indexado' ? (
                         <>
                           <div style={{ fontWeight: 600 }}>{fmtEur(precio)}</div>
@@ -956,14 +956,14 @@ export default function Inversiones() {
                       )}
                     </div>
                     {/* PnL */}
-                    <div style={{ textAlign: 'right', minWidth: 90 }}>
+                    <div className="pos-row-pnl" style={{ textAlign: 'right', minWidth: 90 }}>
                       <div style={{ fontWeight: 600 }}>{fmtEur(valorPos)}</div>
                       <div style={{ fontSize: 12, color: pnlPos >= 0 ? 'var(--green)' : 'var(--red)' }}>
                         {pnlPos >= 0 ? '+' : ''}{fmtEur(pnlPos)} ({(pnlPosP ?? 0) >= 0 ? '+' : ''}{Number(pnlPosP ?? 0).toFixed(1)}%)
                       </div>
                     </div>
                     {/* Actions */}
-                    <div style={{ display: 'flex', gap: 2 }}>
+                    <div className="pos-row-actions" style={{ display: 'flex', gap: 2 }}>
                       {p.tipo === 'Fondo Indexado' && (
                         <button className="btn-icon" style={{ padding: '4px 7px', fontSize: 10, fontWeight: 700, color: 'var(--blue)' }} title="Actualizar VL" onClick={() => setVlModal(p)}>
                           VL

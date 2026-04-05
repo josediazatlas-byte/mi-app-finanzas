@@ -199,10 +199,10 @@ export default function Layout() {
       <header style={{ background: 'var(--bg2)', borderBottom: '1px solid var(--border)', padding: '0 24px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ width: 32, height: 32, background: 'var(--blue)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14 }}>MF</div>
-          <span style={{ fontWeight: 700, fontSize: 16 }}>Mi App Financiera</span>
+          <span className="header-app-name" style={{ fontWeight: 700, fontSize: 16 }}>Mi App Financiera</span>
         </div>
 
-        <nav style={{ display: 'flex', gap: 4 }}>
+        <nav className="header-nav" style={{ display: 'flex', gap: 4 }}>
           {nav.map(({ to, label, icon: Icon, exact }) => (
             <NavLink
               key={to}
@@ -224,7 +224,7 @@ export default function Layout() {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {isDemo ? (
-            <span style={{ fontSize: 12, color: 'var(--amber)', background: 'rgba(245,158,11,0.1)', padding: '4px 10px', borderRadius: 6, border: '1px solid rgba(245,158,11,0.3)' }}>
+            <span className="header-demo-badge" style={{ fontSize: 12, color: 'var(--amber)', background: 'rgba(245,158,11,0.1)', padding: '4px 10px', borderRadius: 6, border: '1px solid rgba(245,158,11,0.3)' }}>
               Modo Demo
             </span>
           ) : (
@@ -286,7 +286,7 @@ export default function Layout() {
             <span style={{ position: 'absolute', top: -3, right: -3, width: 8, height: 8, background: '#a78bfa', borderRadius: '50%', border: '2px solid var(--bg2)' }} />
           </button>
           {/* PDF export */}
-          <button className="btn-icon" onClick={handleExportPDF} title="Exportar PDF">
+          <button className="btn-icon header-pdf-btn" onClick={handleExportPDF} title="Exportar PDF">
             <FileDown size={16} />
           </button>
           {/* Privacy toggle */}
@@ -313,7 +313,7 @@ export default function Layout() {
             </button>
           )}
           {/* User menu */}
-          <div style={{ position: 'relative' }} ref={userMenuRef}>
+          <div className="header-user-menu" style={{ position: 'relative' }} ref={userMenuRef}>
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}
               title={user?.email ?? 'Usuario'}
@@ -374,11 +374,25 @@ export default function Layout() {
         <Outlet />
       </main>
 
+      {/* Bottom navigation — mobile only */}
+      <nav className="bottom-nav">
+        {nav.map(({ to, label, icon: Icon, exact }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={exact}
+            className={({ isActive }) => `bottom-nav-item${isActive ? ' active' : ''}`}
+          >
+            <Icon size={20} />
+            <span>{label}</span>
+          </NavLink>
+        ))}
+      </nav>
+
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
       {showChat && <ChatIA onClose={() => setShowChat(false)} />}
 
       <style>{`
-        @media (max-width: 768px) { .hide-mobile { display: none; } }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
     </div>
