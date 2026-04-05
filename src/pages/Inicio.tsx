@@ -291,7 +291,7 @@ function PanelPatrimonio({ onClose }: { onClose: () => void }) {
 
   const saldoCuentas = cuentas.reduce((sum, c) => sum + toEur(c.saldo, c.divisa), 0);
   const valorInversiones = posiciones.reduce((sum, p) => {
-    if (p.tipo === 'Fondo Indexado') return sum + (p.vl ?? p.precioMedio) * p.acciones;
+    if (p.tipo === 'Fondo Indexado') return sum + (p.vl || p.precioMedio) * p.acciones;
     const cached = precios[p.simbolo];
     const precio = cached ? cached.precio : (MOCK_TICKERS.find(t => t.symbol === p.simbolo)?.price ?? p.precioMedio);
     return sum + toEur(precio * p.acciones, p.divisa);
@@ -838,7 +838,7 @@ export default function Inicio() {
   // Net worth
   const saldoCuentas = cuentas.reduce((sum, c) => sum + toEur(c.saldo, c.divisa), 0);
   const valorInversiones = posiciones.reduce((sum, p) => {
-    if (p.tipo === 'Fondo Indexado') return sum + (p.vl ?? p.precioMedio) * p.acciones;
+    if (p.tipo === 'Fondo Indexado') return sum + (p.vl || p.precioMedio) * p.acciones;
     const cached = precios[p.simbolo];
     const precioActual = cached ? cached.precio : (MOCK_TICKERS.find(t => t.symbol === p.simbolo)?.price || p.precioMedio);
     return sum + toEur(precioActual * p.acciones, p.divisa);
@@ -986,22 +986,60 @@ export default function Inicio() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-      {/* ——— Saludo personalizado ——— */}
-      <div style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #161618 100%)', border: '1px solid #2a2a42', borderRadius: 16, padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>{greetingText}</div>
-          <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 8 }}>{fechaCompleta}</div>
-          <div style={{ fontSize: 13, color: 'var(--text2)', fontStyle: 'italic' }}>{resumenDia}</div>
-        </div>
-        <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 16 }}>
-          {fng && (
-            <div style={{ background: `${fng.color}15`, border: `1px solid ${fng.color}40`, borderRadius: 10, padding: '8px 14px', display: 'inline-block' }}>
-              <div style={{ fontSize: 10, color: 'var(--text2)', marginBottom: 2 }}>Fear & Greed</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: fng.color, lineHeight: 1 }}>{fng.value}</div>
-              <div style={{ fontSize: 10, fontWeight: 600, color: fng.color }}>{fng.label}</div>
+      {/* ——— Hero: Saludo + Variación ——— */}
+      <div style={{
+        background: 'linear-gradient(135deg, #0a0a14 0%, #141428 50%, #0c1022 100%)',
+        border: '1px solid #2a2a42',
+        borderRadius: 20,
+        padding: '28px 28px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        position: 'relative',
+        overflow: 'hidden',
+        minHeight: 128,
+      }}>
+        {/* Decorative glows */}
+        <div style={{ position: 'absolute', top: -80, left: -60, width: 300, height: 300, background: 'radial-gradient(circle, rgba(59,130,246,0.1) 0%, transparent 65%)', borderRadius: '50%', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', bottom: -60, right: 80, width: 200, height: 200, background: 'radial-gradient(circle, rgba(139,92,246,0.07) 0%, transparent 65%)', borderRadius: '50%', pointerEvents: 'none' }} />
+
+        <div style={{ zIndex: 1, flex: 1 }}>
+          <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 6, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', opacity: 0.7 }}>
+            {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </div>
+          <div style={{ fontSize: 30, fontWeight: 800, marginBottom: 14, letterSpacing: '-0.5px', lineHeight: 1.15 }}>
+            {greetingText} 👋
+          </div>
+          {privacyMode ? (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '6px 14px', fontSize: 13, color: 'var(--text2)' }}>
+              🔒 Pulsa el ojo en el header para mostrar los valores
+            </div>
+          ) : variacionDia !== 0 ? (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: variacionDia >= 0 ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${variacionDia >= 0 ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'}`, borderRadius: 10, padding: '7px 14px' }}>
+              <span style={{ fontSize: 16 }}>{variacionDia >= 0 ? '📈' : '📉'}</span>
+              <div>
+                <div style={{ color: variacionDia >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: 700, fontSize: 16, lineHeight: 1 }}>
+                  {variacionDia >= 0 ? '+' : ''}{fmtEur(variacionDia)} hoy
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 2 }}>Variación de cartera</div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ fontSize: 13, color: 'var(--text2)', opacity: 0.7, fontStyle: 'italic' }}>
+              Sin variación de cartera hoy
             </div>
           )}
         </div>
+
+        {fng && (
+          <div style={{ flexShrink: 0, marginLeft: 20, zIndex: 1 }}>
+            <div style={{ background: `${fng.color}12`, border: `1px solid ${fng.color}35`, borderRadius: 14, padding: '12px 18px', textAlign: 'center', minWidth: 96 }}>
+              <div style={{ fontSize: 9, color: 'var(--text2)', marginBottom: 4, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 700 }}>Fear & Greed</div>
+              <div style={{ fontSize: 32, fontWeight: 800, color: fng.color, lineHeight: 1 }}>{fng.value}</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: fng.color, marginTop: 4 }}>{fng.label}</div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Alert */}
@@ -1017,73 +1055,77 @@ export default function Inicio() {
         </div>
       )}
 
-      {/* ——— Quick actions (prominentes) ——— */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-        <button className="card card-hover" style={{ textAlign: 'left', border: '1px solid rgba(59,130,246,0.3)', cursor: 'pointer', background: 'rgba(59,130,246,0.08)', padding: '16px 18px' }} onClick={() => setShowModalIngreso(true)}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-            <div style={{ background: 'var(--blue)', borderRadius: 8, padding: 8, display: 'flex' }}><Plus size={16} color="white" /></div>
-            <span style={{ fontWeight: 700, fontSize: 15 }}>Añadir dinero</span>
-          </div>
-          <p style={{ fontSize: 12, color: 'var(--text2)', margin: 0 }}>Registrar ingreso o movimiento</p>
-        </button>
-        <button className="card card-hover" style={{ textAlign: 'left', border: '1px solid rgba(34,197,94,0.3)', cursor: 'pointer', background: 'rgba(34,197,94,0.08)', padding: '16px 18px' }} onClick={() => setShowModalPosicion(true)}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-            <div style={{ background: 'var(--green)', borderRadius: 8, padding: 8, display: 'flex' }}><TrendingUp size={16} color="white" /></div>
-            <span style={{ fontWeight: 700, fontSize: 15 }}>Añadir inversión</span>
-          </div>
-          <p style={{ fontSize: 12, color: 'var(--text2)', margin: 0 }}>Nueva posición en cartera</p>
-        </button>
-        <button className="card card-hover" style={{ textAlign: 'left', border: '1px solid rgba(167,139,250,0.3)', cursor: 'pointer', background: 'rgba(167,139,250,0.08)', padding: '16px 18px' }} onClick={() => navigate('/analisis')}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-            <div style={{ background: 'var(--purple)', borderRadius: 8, padding: 8, display: 'flex' }}><Search size={16} color="white" /></div>
-            <span style={{ fontWeight: 700, fontSize: 15 }}>Analizar activo</span>
-          </div>
-          <p style={{ fontSize: 12, color: 'var(--text2)', margin: 0 }}>Ver análisis de mercado</p>
-        </button>
+      {/* ——— Accesos rápidos ——— */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        {[
+          { label: 'Añadir ingreso', sub: 'Registrar cobro o entrada', icon: Plus, color: '#3b82f6', bg: 'rgba(59,130,246,0.1)', border: 'rgba(59,130,246,0.28)', onClick: () => setShowModalIngreso(true) },
+          { label: 'Añadir inversión', sub: 'Nueva posición en cartera', icon: TrendingUp, color: '#22c55e', bg: 'rgba(34,197,94,0.1)', border: 'rgba(34,197,94,0.28)', onClick: () => setShowModalPosicion(true) },
+          { label: 'Registrar gasto', sub: 'Apuntar un pago o compra', icon: AlertTriangle, color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.28)', onClick: () => setShowModalGasto(true) },
+          { label: 'Ver análisis', sub: 'Métricas y análisis profundo', icon: Search, color: '#a78bfa', bg: 'rgba(167,139,250,0.1)', border: 'rgba(167,139,250,0.28)', onClick: () => navigate('/analisis') },
+        ].map(a => (
+          <button
+            key={a.label}
+            onClick={a.onClick}
+            style={{
+              background: a.bg, border: `1px solid ${a.border}`,
+              borderRadius: 14, padding: '18px 20px',
+              textAlign: 'left', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 14,
+              transition: 'all 0.15s',
+            }}
+          >
+            <div style={{ background: a.color, borderRadius: 10, width: 42, height: 42, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: `0 4px 12px ${a.color}50` }}>
+              <a.icon size={18} color="white" />
+            </div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 3, color: 'var(--text)' }}>{a.label}</div>
+              <div style={{ fontSize: 12, color: 'var(--text2)' }}>{a.sub}</div>
+            </div>
+          </button>
+        ))}
       </div>
 
-      {/* ——— Patrimonio Neto (card compacta) ——— */}
+      {/* ——— Patrimonio Neto ——— */}
       <div className="card card-hover" style={{ background: 'linear-gradient(135deg, #1e1e2e 0%, #161618 100%)', border: '1px solid #2a2a42', cursor: 'pointer' }} onClick={() => setShowPatrimonio(true)}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <div style={{ fontSize: 13, color: 'var(--text2)', fontWeight: 500 }}>Patrimonio Neto</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ fontSize: 13, color: 'var(--text2)', fontWeight: 500 }}>Patrimonio Neto</div>
             <button
               onClick={(e) => { e.stopPropagation(); setPrivacyMode(!privacyMode); }}
-              title={privacyMode ? 'Mostrar valor' : 'Ocultar valor'}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text2)', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 6 }}
+              title={privacyMode ? 'Mostrar valores' : 'Ocultar valores'}
+              style={{ background: privacyMode ? 'rgba(255,255,255,0.06)' : 'rgba(59,130,246,0.12)', border: `1px solid ${privacyMode ? 'rgba(255,255,255,0.1)' : 'rgba(59,130,246,0.3)'}`, cursor: 'pointer', color: privacyMode ? 'var(--text2)' : 'var(--blue)', display: 'flex', alignItems: 'center', padding: '3px 8px', borderRadius: 6, gap: 4, fontSize: 11, fontWeight: 600 }}
             >
-              {privacyMode ? <EyeOff size={15} /> : <Eye size={15} />}
+              {privacyMode ? <EyeOff size={12} /> : <Eye size={12} />}
+              {privacyMode ? 'Mostrar' : 'Ocultar'}
             </button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: 'var(--text2)', opacity: 0.7 }}>
-              <span>ver desglose</span>
-              <ChevronRight size={13} />
-            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text2)', opacity: 0.6 }}>
+            <span>desglose</span><ChevronRight size={12} />
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
-          <div style={{ fontSize: 36, fontWeight: 800, letterSpacing: '-1px' }}>{fmt(patrimonioNeto)}</div>
-          {!privacyMode && (
-            <span style={{ color: variacionDia >= 0 ? 'var(--green)' : 'var(--red)', fontSize: 15, fontWeight: 600 }}>
+
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 14, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-0.5px' }}>{fmt(patrimonioNeto)}</div>
+          {!privacyMode && variacionDia !== 0 && (
+            <span style={{ color: variacionDia >= 0 ? 'var(--green)' : 'var(--red)', fontSize: 13, fontWeight: 600 }}>
               {variacionDia >= 0 ? '+' : ''}{fmtEur(variacionDia)} hoy
             </span>
           )}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
-          <div>
-            <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Liquidez</div>
-            <div style={{ fontWeight: 600 }}>{fmt(saldoCuentas)}</div>
-            <div style={{ fontSize: 12, color: liquidezPct < 10 ? 'var(--amber)' : 'var(--text2)' }}>{privacyMode ? '—' : `${Number(liquidezPct ?? 0).toFixed(1)}%`}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Inversiones</div>
-            <div style={{ fontWeight: 600 }}>{fmt(valorInversiones)}</div>
-            <div style={{ fontSize: 12, color: 'var(--text2)' }}>{privacyMode ? '—' : `${patrimonioNeto > 0 ? ((valorInversiones / patrimonioNeto) * 100).toFixed(1) : 0}%`}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Posiciones</div>
-            <div style={{ fontWeight: 600 }}>{posiciones.length}</div>
-            <div style={{ fontSize: 12, color: 'var(--text2)' }}>activos</div>
-          </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 14 }}>
+          {[
+            { label: 'Liquidez', val: saldoCuentas, sub: privacyMode ? '—' : `${Number(liquidezPct ?? 0).toFixed(1)}%`, subColor: liquidezPct < 10 ? 'var(--amber)' : 'var(--text2)' },
+            { label: 'Inversiones', val: valorInversiones, sub: privacyMode ? '—' : `${patrimonioNeto > 0 ? ((valorInversiones / patrimonioNeto) * 100).toFixed(1) : 0}%`, subColor: 'var(--text2)' },
+            { label: 'Inmobiliario', val: equityInmuebles, sub: privacyMode ? '—' : `${patrimonioNeto > 0 ? ((equityInmuebles / patrimonioNeto) * 100).toFixed(1) : 0}%`, subColor: 'var(--text2)' },
+            { label: 'Deudas', val: -totalPasivos, sub: `${posiciones.length} activos`, subColor: 'var(--text2)' },
+          ].map(m => (
+            <div key={m.label} style={{ background: 'rgba(255,255,255,0.02)', borderRadius: 10, padding: '10px 12px' }}>
+              <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 4 }}>{m.label}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: m.val < 0 ? 'var(--red)' : 'var(--text)' }}>{m.val < 0 ? '-' : ''}{fmt(Math.abs(m.val))}</div>
+              <div style={{ fontSize: 11, color: m.subColor, marginTop: 2 }}>{m.sub}</div>
+            </div>
+          ))}
         </div>
         {/* Objetivo */}
         <div>
@@ -1174,7 +1216,7 @@ export default function Inicio() {
           </div>
           <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>{inmuebles.length} inmuebles · valor {fmt(valorInmueblesTotal)}</div>
           {hipotecasInmuebles > 0 && (
-            <div style={{ fontSize: 11, color: 'var(--red)' }}>Hipotecas: -{privacyMode ? '••••••• €' : fmtEur(hipotecasInmuebles)}</div>
+            <div style={{ fontSize: 11, color: 'var(--red)' }}>Hipotecas: -{fmt(hipotecasInmuebles)}</div>
           )}
           {(() => {
             const rentaMes = inmuebles.filter(i => i.generaRenta).reduce((s, i) => s + i.rentaMensualBruta, 0);
@@ -1292,6 +1334,8 @@ export default function Inicio() {
       {showModalIngreso && <ModalIngreso onClose={() => setShowModalIngreso(false)} />}
       {showModalGasto && <ModalGasto onClose={() => setShowModalGasto(false)} />}
       {showModalPosicion && <ModalAddPosicion onClose={() => setShowModalPosicion(false)} />}
+
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
 
       {/* Panels */}
       {panel === 'ingresos' && (
