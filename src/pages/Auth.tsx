@@ -96,28 +96,62 @@ export default function Auth() {
 
   return (
     <div style={{
-      minHeight: '100vh', background: 'var(--bg)',
+      minHeight: '100vh',
+      background: 'var(--bg)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: 24,
+      position: 'relative',
+      overflow: 'hidden',
     }}>
-      <div style={{ width: '100%', maxWidth: 400 }}>
+      {/* Animated gradient blobs */}
+      <div style={{ position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
+        <div style={{
+          position: 'absolute', top: '-20%', left: '-10%',
+          width: 600, height: 600,
+          background: 'radial-gradient(circle, rgba(59,130,246,0.18) 0%, transparent 70%)',
+          animation: 'blobDrift1 14s ease-in-out infinite alternate',
+          borderRadius: '50%',
+        }} />
+        <div style={{
+          position: 'absolute', bottom: '-15%', right: '-10%',
+          width: 500, height: 500,
+          background: 'radial-gradient(circle, rgba(139,92,246,0.14) 0%, transparent 70%)',
+          animation: 'blobDrift2 18s ease-in-out infinite alternate',
+          borderRadius: '50%',
+        }} />
+        <div style={{
+          position: 'absolute', top: '40%', right: '15%',
+          width: 300, height: 300,
+          background: 'radial-gradient(circle, rgba(34,197,94,0.09) 0%, transparent 70%)',
+          animation: 'blobDrift1 22s ease-in-out infinite alternate-reverse',
+          borderRadius: '50%',
+        }} />
+      </div>
+
+      <div style={{ width: '100%', maxWidth: 420, position: 'relative', zIndex: 1 }}>
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <div style={{
-            width: 64, height: 64, background: 'var(--blue)', borderRadius: 16,
+            width: 72, height: 72,
+            background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
+            borderRadius: 20,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            margin: '0 auto 16px', boxShadow: '0 8px 32px rgba(59,130,246,0.35)',
+            margin: '0 auto 18px',
+            boxShadow: '0 0 0 8px rgba(99,102,241,0.12), 0 12px 40px rgba(59,130,246,0.45)',
           }}>
-            <TrendingUp size={32} color="white" />
+            <TrendingUp size={34} color="white" />
           </div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}>Mi App Financiera</h1>
+          <h1 style={{ fontSize: 26, fontWeight: 800, marginBottom: 6, letterSpacing: '-0.5px' }}>Mi App Financiera</h1>
           <p style={{ fontSize: 14, color: 'var(--text2)' }}>Gestiona tu patrimonio de forma inteligente</p>
         </div>
 
         {/* Card */}
         <div style={{
-          background: 'var(--bg2)', border: '1px solid var(--border)',
-          borderRadius: 16, padding: 28, boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+          background: 'rgba(255,255,255,0.03)',
+          border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: 20, padding: 30,
+          boxShadow: '0 8px 48px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06)',
+          backdropFilter: 'blur(20px)',
         }}>
           {showReset ? (
             /* ── Reset password ── */
@@ -285,13 +319,56 @@ export default function Auth() {
           )}
         </div>
 
-        <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text2)', marginTop: 20 }}>
+        {/* Demo mode link */}
+        <div style={{ textAlign: 'center', marginTop: 20 }}>
+          <a
+            href="/"
+            style={{
+              fontSize: 13, color: 'var(--text2)',
+              textDecoration: 'none', cursor: 'pointer',
+              borderBottom: '1px dashed rgba(255,255,255,0.2)',
+              paddingBottom: 1,
+            }}
+          >
+            Continuar sin cuenta →
+          </a>
+        </div>
+
+        {/* Feature highlights */}
+        <div style={{ marginTop: 28, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          {[
+            { icon: '📊', label: 'Finanzas & presupuestos' },
+            { icon: '📈', label: 'Inversiones en tiempo real' },
+            { icon: '🏠', label: 'Inmuebles & patrimonio' },
+            { icon: '🤖', label: 'Asesor IA integrado' },
+          ].map(f => (
+            <div key={f.label} style={{
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.07)',
+              borderRadius: 10, padding: '9px 12px',
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}>
+              <span style={{ fontSize: 16 }}>{f.icon}</span>
+              <span style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 1.3 }}>{f.label}</span>
+            </div>
+          ))}
+        </div>
+
+        <p style={{ textAlign: 'center', fontSize: 11, color: 'rgba(255,255,255,0.2)', marginTop: 20 }}>
           Tus datos están protegidos con encriptación de extremo a extremo.
         </p>
       </div>
 
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes blobDrift1 {
+          from { transform: translate(0, 0) scale(1); }
+          to   { transform: translate(60px, 40px) scale(1.1); }
+        }
+        @keyframes blobDrift2 {
+          from { transform: translate(0, 0) scale(1); }
+          to   { transform: translate(-50px, -30px) scale(1.08); }
+        }
       `}</style>
     </div>
   )

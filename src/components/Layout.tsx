@@ -301,6 +301,17 @@ export default function Layout() {
           <button className="btn-icon" onClick={() => setShowSettings(true)}>
             <Settings size={16} />
           </button>
+          {/* Direct logout button — always visible */}
+          {user && (
+            <button
+              className="btn-icon"
+              onClick={handleSignOut}
+              title="Cerrar sesión"
+              style={{ color: 'var(--text2)' }}
+            >
+              <LogOut size={16} />
+            </button>
+          )}
           {/* User menu */}
           <div style={{ position: 'relative' }} ref={userMenuRef}>
             <button

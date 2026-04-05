@@ -8,6 +8,10 @@ import { useClientesStore } from '../stores/useClientesStore'
 import { useFacturasStore } from '../stores/useFacturasStore'
 import { useInmuebleStore } from '../stores/useInmuebleStore'
 import { useConfigStore } from '../stores/useConfigStore'
+import { useDeudaStore } from '../stores/useDeudaStore'
+import { usePresupuestoStore } from '../stores/usePresupuestoStore'
+import { useDividendosStore } from '../stores/useDividendosStore'
+import { useFondoEmergenciaStore } from '../stores/useFondoEmergenciaStore'
 import type { Ingreso, Gasto, Cuenta } from '../stores/useFinanzasStore'
 import type { Posicion } from '../stores/useInversionesStore'
 import type { Meta } from '../stores/useMetasStore'
@@ -333,7 +337,28 @@ export async function loadUserData(userId: string): Promise<boolean> {
     }
     if (cfgRes.data) {
       const cfg = cfgRes.data as Row
-      if (cfg.datos_autonomo) useConfigStore.setState({ autonomo: cfg.datos_autonomo as never })
+      if (cfg.datos_autonomo) {
+        const da = cfg.datos_autonomo as Row
+        if (da.perfil !== undefined) {
+          // New format: datos_autonomo contains nested stores
+          useConfigStore.setState({ autonomo: da.perfil as never })
+          if (Array.isArray(da.deudas) && da.deudas.length > 0) {
+            useDeudaStore.setState({ deudas: da.deudas as never })
+          }
+          if (Array.isArray(da.presupuestos) && da.presupuestos.length > 0) {
+            usePresupuestoStore.setState({ presupuestos: da.presupuestos as never })
+          }
+          if (Array.isArray(da.dividendos) && da.dividendos.length > 0) {
+            useDividendosStore.setState({ dividendos: da.dividendos as never })
+          }
+          if (da.fondo_emergencia) {
+            useFondoEmergenciaStore.setState(da.fondo_emergencia as never)
+          }
+        } else {
+          // Old format: datos_autonomo was the AutonomoProfile directly
+          useConfigStore.setState({ autonomo: cfg.datos_autonomo as never })
+        }
+      }
       if (cfg.api_keys) {
         const keys = cfg.api_keys as Row
         useConfigStore.setState({
@@ -371,6 +396,10 @@ export async function saveAllData(userId: string): Promise<void> {
     const { clientes } = useClientesStore.getState()
     const { metas } = useMetasStore.getState()
     const { suscripciones } = useSuscripcionesStore.getState()
+    const { deudas } = useDeudaStore.getState()
+    const { presupuestos } = usePresupuestoStore.getState()
+    const { dividendos } = useDividendosStore.getState()
+    const fondo = useFondoEmergenciaStore.getState()
     const config = useConfigStore.getState()
 
     const movimientos = [
@@ -404,7 +433,21 @@ export async function saveAllData(userId: string): Promise<void> {
 
     await supabase.from('configuracion').upsert({
       user_id: userId,
-      datos_autonomo: config.autonomo,
+      datos_autonomo: {
+        perfil: config.autonomo,
+        deudas,
+        presupuestos,
+        dividendos,
+        fondo_emergencia: {
+          objetivoActual: fondo.objetivoActual,
+          saldoManual: fondo.saldoManual,
+          cuentaVinculadaId: fondo.cuentaVinculadaId,
+          extraMensual: fondo.extraMensual,
+          mesesACubrir: fondo.mesesACubrir,
+          historialObjetivos: fondo.historialObjetivos,
+          fechaUltimaActualizacion: fondo.fechaUltimaActualizacion,
+        },
+      },
       api_keys: {
         apiKey: config.apiKey,
         anthropicKey: config.anthropicKey,
@@ -443,9 +486,14 @@ export function setupSyncSubscriptions(userId: string): () => void {
   const u6 = useFacturasStore.subscribe(sub)
   const u7 = useInmuebleStore.subscribe(sub)
   const u8 = useConfigStore.subscribe(sub)
+  const u9 = useDeudaStore.subscribe(sub)
+  const u10 = usePresupuestoStore.subscribe(sub)
+  const u11 = useDividendosStore.subscribe(sub)
+  const u12 = useFondoEmergenciaStore.subscribe(sub)
 
   return () => {
     u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8()
+    u9(); u10(); u11(); u12()
     if (saveTimer) clearTimeout(saveTimer)
   }
 }
@@ -456,6 +504,7 @@ export function hasLocalStorageData(): boolean {
   const keys = [
     'finanzas-store', 'inversiones-store', 'metas-store',
     'suscripciones-store', 'facturas-store', 'clientes-store', 'inmueble-store',
+    'deuda-store', 'dividendos-store',
   ]
   return keys.some(key => {
     const raw = localStorage.getItem(key)
