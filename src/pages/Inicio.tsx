@@ -575,6 +575,7 @@ const PRIO_COLORS: Record<number, string> = { 1: '#ef4444', 2: '#f59e0b', 3: '#2
 
 function ModalMeta({ meta, onClose }: { meta?: Meta | null; onClose: () => void }) {
   const { addMeta, updateMeta } = useMetasStore();
+  const { gastos } = useFinanzasStore();
   const isEdit = !!meta;
   const [form, setForm] = useState({
     nombre: meta?.nombre ?? '',
@@ -587,7 +588,46 @@ function ModalMeta({ meta, onClose }: { meta?: Meta | null; onClose: () => void 
     prioridad: (meta?.prioridad ?? 2) as 1 | 2 | 3,
     color: meta?.color ?? '#3b82f6',
   });
+  const [mesesFondo, setMesesFondo] = useState(6);
+  const [precioZona, setPrecioZona] = useState('');
   const upd = (k: string, v: unknown) => setForm(f => ({ ...f, [k]: v }));
+
+  // Gastos promedio últimos 3 meses
+  const gastoPromedio3m = (() => {
+    const now = new Date();
+    let total = 0; let mesesCon = 0;
+    for (let i = 0; i < 3; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const sum = gastos.filter(g => g.fecha.startsWith(key)).reduce((s, g) => s + g.importe, 0);
+      if (sum > 0) { total += sum; mesesCon++; }
+    }
+    return mesesCon > 0 ? Math.round(total / mesesCon) : 0;
+  })();
+
+  // Capital FIRE (regla 4%) basado en gastos actuales
+  const capitalFIRE = gastoPromedio3m > 0 ? Math.round(gastoPromedio3m * 12 / 0.04) : 0;
+
+  const handleTipoChange = (tipo: string) => {
+    const updates: Record<string, unknown> = { tipo };
+    if (tipo === 'Fondo emergencia' && gastoPromedio3m > 0)
+      updates.objetivo = Math.round(gastoPromedio3m * mesesFondo).toString();
+    else if (tipo === 'Jubilación' && capitalFIRE > 0)
+      updates.objetivo = capitalFIRE.toString();
+    setForm(f => ({ ...f, ...updates }));
+  };
+
+  const handleMesesFondo = (m: number) => {
+    setMesesFondo(m);
+    if (gastoPromedio3m > 0) upd('objetivo', Math.round(gastoPromedio3m * m).toString());
+  };
+
+  const handlePrecioZona = (v: string) => {
+    setPrecioZona(v);
+    const p = parseFloat(v) || 0;
+    if (p > 0) upd('objetivo', Math.round(p * 0.20).toString());
+  };
+
   const handleSave = () => {
     if (!form.nombre.trim() || !form.objetivo) { toast.error('Nombre y objetivo son obligatorios'); return; }
     const data = { ...form, objetivo: parseFloat(form.objetivo) || 0, ahorrado: parseFloat(form.ahorrado) || 0, aportacionMensual: parseFloat(form.aportacionMensual) || 0, prioridad: form.prioridad as 1 | 2 | 3 };
@@ -595,9 +635,10 @@ function ModalMeta({ meta, onClose }: { meta?: Meta | null; onClose: () => void 
     else { addMeta(data); toast.success('Meta creada'); }
     onClose();
   };
+
   return (
     <div className="modal-overlay">
-      <div className="modal" style={{ maxWidth: 500 }}>
+      <div className="modal" style={{ maxWidth: 520, maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h2 style={{ fontSize: 17, fontWeight: 700 }}>{isEdit ? 'Editar' : 'Nueva'} Meta</h2>
           <button className="btn-icon" onClick={onClose}><X size={16} /></button>
@@ -606,14 +647,89 @@ function ModalMeta({ meta, onClose }: { meta?: Meta | null; onClose: () => void 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div><label className="label">Nombre *</label><input className="input" value={form.nombre} onChange={e => upd('nombre', e.target.value)} /></div>
             <div><label className="label">Tipo</label>
-              <select className="select" value={form.tipo} onChange={e => upd('tipo', e.target.value)}>
+              <select className="select" value={form.tipo} onChange={e => handleTipoChange(e.target.value)}>
                 {META_TIPOS.map(t => <option key={t}>{t}</option>)}
               </select>
             </div>
           </div>
           <div><label className="label">Descripción</label><input className="input" value={form.descripcion} onChange={e => upd('descripcion', e.target.value)} /></div>
+
+          {/* ── Fondo de emergencia ── */}
+          {form.tipo === 'Fondo emergencia' && (
+            <div style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, padding: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--amber)', marginBottom: 10 }}>🛡️ Cálculo automático</div>
+              <div style={{ marginBottom: 10 }}>
+                <label className="label">Meses de gastos a cubrir: <strong style={{ color: 'var(--amber)' }}>{mesesFondo}</strong></label>
+                <input type="range" min={1} max={24} step={1} value={mesesFondo} onChange={e => handleMesesFondo(+e.target.value)} style={{ width: '100%', marginTop: 4 }} className="slider" />
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text2)', marginTop: 2 }}>
+                  <span>1 mes</span><span>6</span><span>12</span><span>24 meses</span>
+                </div>
+              </div>
+              {gastoPromedio3m > 0 ? (
+                <div style={{ background: 'rgba(245,158,11,0.1)', borderRadius: 8, padding: '8px 12px', fontSize: 13 }}>
+                  <span style={{ color: 'var(--text2)' }}>{fmtEur(gastoPromedio3m)}/mes</span>
+                  <span style={{ color: 'var(--text2)', margin: '0 6px' }}>×</span>
+                  <span style={{ color: 'var(--amber)', fontWeight: 700 }}>{mesesFondo} meses</span>
+                  <span style={{ color: 'var(--text2)', margin: '0 6px' }}>=</span>
+                  <span style={{ color: 'var(--text)', fontWeight: 800 }}>{fmtEur(gastoPromedio3m * mesesFondo)}</span>
+                  <span style={{ fontSize: 10, color: 'var(--text2)', marginLeft: 6 }}>(prom. últimos 3 meses)</span>
+                </div>
+              ) : (
+                <div style={{ fontSize: 11, color: 'var(--text2)' }}>Añade gastos para calcular automáticamente.</div>
+              )}
+            </div>
+          )}
+
+          {/* ── Jubilación: FIRE ── */}
+          {form.tipo === 'Jubilación' && (
+            <div style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 10, padding: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#6366f1', marginBottom: 8 }}>🏖️ Regla del 4% · FIRE</div>
+              {capitalFIRE > 0 ? (
+                <>
+                  <div style={{ background: 'rgba(99,102,241,0.1)', borderRadius: 8, padding: '8px 12px', fontSize: 13, marginBottom: 8 }}>
+                    <span style={{ color: 'var(--text2)' }}>{fmtEur(gastoPromedio3m * 12)}/año</span>
+                    <span style={{ color: 'var(--text2)', margin: '0 6px' }}>÷</span>
+                    <span style={{ color: '#6366f1', fontWeight: 700 }}>4%</span>
+                    <span style={{ color: 'var(--text2)', margin: '0 6px' }}>=</span>
+                    <span style={{ color: 'var(--text)', fontWeight: 800 }}>{fmtEur(capitalFIRE)}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text2)' }}>Basado en tus gastos actuales ({fmtEur(gastoPromedio3m)}/mes). El objetivo se ha rellenado automáticamente — puedes modificarlo.</div>
+                </>
+              ) : (
+                <div style={{ fontSize: 11, color: 'var(--text2)' }}>Registra gastos para calcular tu número FIRE automáticamente.</div>
+              )}
+            </div>
+          )}
+
+          {/* ── Vivienda: entrada 20% ── */}
+          {form.tipo === 'Vivienda' && (
+            <div style={{ background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 10, padding: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--green)', marginBottom: 10 }}>🏡 Cálculo de entrada (20%)</div>
+              <div>
+                <label className="label">Precio estimado de la vivienda (€)</label>
+                <input className="input" type="number" placeholder="ej. 250000" value={precioZona} onChange={e => handlePrecioZona(e.target.value)} />
+              </div>
+              {parseFloat(precioZona) > 0 && (
+                <div style={{ background: 'rgba(34,197,94,0.1)', borderRadius: 8, padding: '8px 12px', fontSize: 13, marginTop: 8 }}>
+                  <span style={{ color: 'var(--text2)' }}>{fmtEur(parseFloat(precioZona))}</span>
+                  <span style={{ color: 'var(--text2)', margin: '0 6px' }}>×</span>
+                  <span style={{ color: 'var(--green)', fontWeight: 700 }}>20%</span>
+                  <span style={{ color: 'var(--text2)', margin: '0 6px' }}>=</span>
+                  <span style={{ color: 'var(--text)', fontWeight: 800 }}>{fmtEur(parseFloat(precioZona) * 0.20)}</span>
+                  <span style={{ fontSize: 10, color: 'var(--text2)', marginLeft: 6 }}>entrada mínima</span>
+                </div>
+              )}
+            </div>
+          )}
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            <div><label className="label">Objetivo (€) *</label><input className="input" type="number" value={form.objetivo} onChange={e => upd('objetivo', e.target.value)} /></div>
+            <div>
+              <label className="label">Objetivo (€) *</label>
+              <input className="input" type="number" value={form.objetivo} onChange={e => upd('objetivo', e.target.value)} />
+              {(form.tipo === 'Fondo emergencia' || form.tipo === 'Jubilación' || (form.tipo === 'Vivienda' && parseFloat(precioZona) > 0)) && (
+                <div style={{ fontSize: 10, color: 'var(--text2)', marginTop: 2 }}>Auto-calculado · editable</div>
+              )}
+            </div>
             <div><label className="label">Ya ahorrado (€)</label><input className="input" type="number" value={form.ahorrado} onChange={e => upd('ahorrado', e.target.value)} /></div>
             <div><label className="label">Aportación/mes (€)</label><input className="input" type="number" value={form.aportacionMensual} onChange={e => upd('aportacionMensual', e.target.value)} /></div>
           </div>
@@ -642,7 +758,7 @@ function ModalMeta({ meta, onClose }: { meta?: Meta | null; onClose: () => void 
 
 function SectionMetas() {
   const { metas, removeMeta, aportarMeta } = useMetasStore();
-  const { addGasto, cuentas } = useFinanzasStore();
+  const { addGasto, cuentas, gastos } = useFinanzasStore();
   const { privacyMode } = useConfigStore();
   const { saldoManual: fondoSaldo, cuentaVinculadaId: fondoCuentaId, objetivoActual: fondoObjetivo } = useFondoEmergenciaStore();
   const cuentaFondo = fondoCuentaId ? cuentas.find(c => c.id === fondoCuentaId) : null;
@@ -655,6 +771,18 @@ function SectionMetas() {
   const [aportarImporte, setAportarImporte] = useState('');
 
   const now = new Date();
+
+  // Gastos promedio últimos 3 meses (para cálculo meses cubiertos en metas de fondo)
+  const gastoPromedio3m = (() => {
+    let total = 0; let n = 0;
+    for (let i = 0; i < 3; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const sum = gastos.filter(g => g.fecha.startsWith(key)).reduce((s, g) => s + g.importe, 0);
+      if (sum > 0) { total += sum; n++; }
+    }
+    return n > 0 ? Math.round(total / n) : 0;
+  })();
 
   const metasConCalcs = metas.map(m => {
     const falta = Math.max(0, m.objetivo - m.ahorrado);
@@ -791,6 +919,30 @@ function SectionMetas() {
                 }
               </div>
             </div>
+            {/* Fondo emergencia: meses cubiertos */}
+            {m.tipo === 'Fondo emergencia' && gastoPromedio3m > 0 && (
+              <div style={{ marginTop: 10, padding: '10px 12px', background: 'rgba(245,158,11,0.06)', borderRadius: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <span style={{ fontSize: 12, color: 'var(--text2)' }}>Meses de gastos cubiertos</span>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: m.ahorrado >= gastoPromedio3m * 6 ? 'var(--green)' : 'var(--amber)' }}>
+                    {(m.ahorrado / gastoPromedio3m).toFixed(1)} meses
+                  </span>
+                </div>
+                {/* Bar with marks */}
+                <div style={{ position: 'relative', height: 20 }}>
+                  <div style={{ position: 'absolute', top: 6, left: 0, right: 0, height: 8, background: 'var(--bg2)', borderRadius: 4, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${Math.min((m.ahorrado / gastoPromedio3m / 12) * 100, 100)}%`, background: m.ahorrado >= gastoPromedio3m * 6 ? 'var(--green)' : 'var(--amber)', borderRadius: 4, transition: 'width 0.6s ease' }} />
+                  </div>
+                  {[1, 3, 6, 12].map(mark => (
+                    <div key={mark} style={{ position: 'absolute', top: 0, left: `${(mark / 12) * 100}%`, transform: 'translateX(-50%)' }}>
+                      <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 auto' }} />
+                      <div style={{ fontSize: 9, color: 'var(--text2)', textAlign: 'center', marginTop: 2, whiteSpace: 'nowrap' }}>{mark}m</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text2)', marginTop: 4 }}>{fmtEur(gastoPromedio3m)}/mes promedio · objetivo recomendado: 6 meses</div>
+              </div>
+            )}
           </div>
         ))}
       </div>
