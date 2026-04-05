@@ -6,7 +6,8 @@
       "Bash(npm uninstall:*)",
       "Bash(find C:UsersJoseDesktopmi-app-finanzassrcstores -type f -name *.ts)",
       "Bash(find C:UsersJoseDesktopmi-app-finanzassrcpages -type f -name *.tsx)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(wc -l /c/Users/Jose/Desktop/mi-app-finanzas/src/**/*.tsx /c/Users/Jose/Desktop/mi-app-finanzas/src/**/*.ts)"
     ]
   }
 }

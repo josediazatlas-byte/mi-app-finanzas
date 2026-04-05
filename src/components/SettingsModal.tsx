@@ -4,18 +4,22 @@ import { useConfigStore } from '../stores/useConfigStore';
 import { testConnection } from '../services/alphaVantage';
 import { testConnection as testExchangeRate } from '../services/exchangeRate';
 import { testFMPConnection, clearFMPCache } from '../services/financialModelingPrep';
+import { clearFredCache } from '../services/fred';
+import { clearYfCache } from '../services/yfinance';
+import { clearCnmvCache } from '../services/cnmv';
 import { useMercadoStore } from '../stores/useMercadoStore';
 import toast from 'react-hot-toast';
 
 interface Props { onClose: () => void; }
 
 export default function SettingsModal({ onClose }: Props) {
-  const { apiKey, setApiKey, anthropicKey, setAnthropicKey, fmpKey, setFmpKey, exchangeRateKey, setExchangeRateKey, autoRefresh, setAutoRefresh, baseCurrency, setBaseCurrency, exportData, importData, clearAllData, autonomo, setAutonomo } = useConfigStore();
+  const { apiKey, setApiKey, anthropicKey, setAnthropicKey, fmpKey, setFmpKey, exchangeRateKey, setExchangeRateKey, fredKey, setFredKey, autoRefresh, setAutoRefresh, baseCurrency, setBaseCurrency, exportData, importData, clearAllData, autonomo, setAutonomo } = useConfigStore();
   const { exchangeRates } = useMercadoStore();
   const [tmpKey, setTmpKey] = useState(apiKey);
   const [tmpAnthropicKey, setTmpAnthropicKey] = useState(anthropicKey);
   const [tmpFmpKey, setTmpFmpKey] = useState(fmpKey);
   const [tmpExchangeKey, setTmpExchangeKey] = useState(exchangeRateKey);
+  const [tmpFredKey, setTmpFredKey] = useState(fredKey);
   const [settingsTab, setSettingsTab] = useState<'general' | 'apis' | 'autonomo'>('general');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<boolean | null>(null);
@@ -155,6 +159,64 @@ export default function SettingsModal({ onClose }: Props) {
                     : ' · Tipos estimados (sin API key)'}
                 </div>
               )}
+            </div>
+
+            <div style={{ height: 1, background: 'var(--border)' }} />
+
+            {/* FRED API */}
+            <div>
+              <label className="label" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <Key size={12} /> FRED API (macro económica)
+              </label>
+              <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 8 }}>Gratuita sin límite. Obtén tu clave en fred.stlouisfed.org → My Account → API Keys</div>
+              <input className="input" type="password" value={tmpFredKey} onChange={e => setTmpFredKey(e.target.value)} placeholder="API key FRED..." />
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button className="btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => { setFredKey(tmpFredKey); toast.success('API Key FRED guardada'); }}>
+                  <Check size={14} /> Guardar
+                </button>
+                {fredKey && (
+                  <button className="btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => { clearFredCache(); toast.success('Caché FRED borrada'); }}>
+                    <Database size={14} /> Limpiar caché
+                  </button>
+                )}
+              </div>
+              {fredKey && <div style={{ marginTop: 6, fontSize: 12, color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 4 }}><Check size={12} /> Clave configurada · Datos macro activos en Análisis → Macro</div>}
+            </div>
+
+            <div style={{ height: 1, background: 'var(--border)' }} />
+
+            {/* Estado de fuentes */}
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Estado de fuentes de datos</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {[
+                  { name: 'Alpha Vantage', desc: 'Precios acciones tiempo real', active: !!apiKey, key: apiKey },
+                  { name: 'Financial Modeling Prep', desc: 'Fundamentales y análisis', active: !!fmpKey, key: fmpKey },
+                  { name: 'ExchangeRate API', desc: 'Tipos de cambio', active: !!exchangeRateKey, key: exchangeRateKey },
+                  { name: 'FRED (St. Louis Fed)', desc: 'Indicadores macroeconómicos', active: !!fredKey, key: fredKey },
+                  { name: 'CoinGecko', desc: 'Precios crypto (sin clave)', active: true, key: 'free' },
+                  { name: 'OpenInsider', desc: 'Insider trading (sin clave)', active: true, key: 'free' },
+                  { name: 'Yahoo Finance', desc: 'Histórico e índices (sin clave)', active: true, key: 'free' },
+                  { name: 'CNMV', desc: 'VL fondos indexados (sin clave)', active: true, key: 'free' },
+                ].map(s => (
+                  <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', background: 'var(--bg3)', borderRadius: 8 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: s.active ? 'var(--green)' : 'var(--text2)', flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600 }}>{s.name}</div>
+                      <div style={{ fontSize: 10, color: 'var(--text2)' }}>{s.desc}</div>
+                    </div>
+                    <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 10, background: s.active ? 'rgba(34,197,94,0.12)' : 'rgba(152,152,168,0.12)', color: s.active ? 'var(--green)' : 'var(--text2)', fontWeight: 600, flexShrink: 0 }}>
+                      {s.active ? (s.key === 'free' ? 'Activo' : 'Configurado') : 'Sin configurar'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <button className="btn-secondary" style={{ marginTop: 10, width: '100%', justifyContent: 'center', fontSize: 12 }} onClick={() => {
+                clearFredCache(); clearYfCache(); clearCnmvCache();
+                toast.success('Caché de todas las fuentes borrada');
+              }}>
+                <Database size={12} /> Actualizar todos los datos (limpiar caché)
+              </button>
             </div>
           </div>
         )}

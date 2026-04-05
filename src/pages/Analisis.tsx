@@ -10,9 +10,12 @@ import { useConfigStore } from '../stores/useConfigStore';
 import { getQuote, MOCK_TICKERS } from '../services/alphaVantage';
 import { cgGetPrices, symbolToId, isCryptoSymbol } from '../services/coinGecko';
 import { getCompanyProfile, getKeyMetrics, getRatings, getPriceTarget, type CompanyProfile, type KeyMetrics, type Rating, type PriceTarget } from '../services/financialModelingPrep';
+import { getInsiderTransactions, getInsiderSignal, type InsiderTransaction } from '../services/openInsider';
+import { getFredSeries, getFredSignal, formatFredValue, FRED_SERIES, type FredObservation } from '../services/fred';
+import { getMultipleYfHistory, BENCHMARK_INDICES, type YfResult } from '../services/yfinance';
 import { fmtEur, toEur, USD_TO_EUR } from '../utils/format';
 import { calcScoreCartera } from '../utils/scoreCartera';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 
 type Badge = 'Comprar' | 'Mantener' | 'Vender';
 
@@ -44,20 +47,6 @@ const MACRO_SIGNALS = [
   { name: 'VIX', valor: '14.2', desc: 'Índice de volatilidad', estado: 'positivo' },
 ];
 
-const BACKTEST_DATA = [
-  { mes: 'Ene', cartera: 100, sp500: 100 },
-  { mes: 'Feb', cartera: 103, sp500: 101 },
-  { mes: 'Mar', cartera: 101, sp500: 103 },
-  { mes: 'Abr', cartera: 107, sp500: 105 },
-  { mes: 'May', cartera: 110, sp500: 107 },
-  { mes: 'Jun', cartera: 108, sp500: 109 },
-  { mes: 'Jul', cartera: 115, sp500: 111 },
-  { mes: 'Ago', cartera: 118, sp500: 113 },
-  { mes: 'Sep', cartera: 114, sp500: 110 },
-  { mes: 'Oct', cartera: 120, sp500: 115 },
-  { mes: 'Nov', cartera: 125, sp500: 118 },
-  { mes: 'Dic', cartera: 128, sp500: 120 },
-];
 
 // Spanish capital gains tax brackets
 function calcIRPF(ganancia: number): number {
@@ -77,11 +66,19 @@ export default function Analisis() {
   const { dividendos } = useDividendosStore();
   const { inmuebles } = useInmuebleStore();
   useDeudaStore();
-  const { fmpKey } = useConfigStore();
+  const { fmpKey, fredKey } = useConfigStore();
   const [tab, setTab] = useState<'empresas' | 'macro' | 'backtest' | 'fiscalidad'>('empresas');
   const [refreshing, setRefreshing] = useState(false);
   const [fmpData, setFmpData] = useState<Record<string, FMPData>>({});
   const [expandedFmp, setExpandedFmp] = useState<Record<string, boolean>>({});
+  const [expandedInsider, setExpandedInsider] = useState<Record<string, boolean>>({});
+  const [insiderData, setInsiderData] = useState<Record<string, InsiderTransaction[]>>({});
+  const [fredData, setFredData] = useState<Record<string, FredObservation[]>>({});
+  const [fredLoading, setFredLoading] = useState(false);
+  const [backtestData, setBacktestData] = useState<Record<string, YfResult>>({});
+  const [backtestLoading, setBacktestLoading] = useState(false);
+  const [selectedIndices, setSelectedIndices] = useState(['^GSPC', '^IBEX', 'IWDA.AS']);
+  const [backtestPeriod, setBacktestPeriod] = useState<'1y' | '5y' | '10y'>('5y');
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Auto-expand and scroll to focused symbol
@@ -150,6 +147,42 @@ export default function Analisis() {
       setFmpData(prev => ({ ...prev, [p.simbolo]: { profile, metrics, rating, priceTarget } }));
     });
   }, [posiciones, fmpKey]);
+
+  // Load insider data for stock positions (lazy - load when empresas tab is active)
+  useEffect(() => {
+    if (tab !== 'empresas') return;
+    const stockPos = posiciones.filter(p => p.tipo !== 'Crypto' && p.tipo !== 'Fondo Indexado' && !isCryptoSymbol(p.simbolo));
+    stockPos.forEach(async (p) => {
+      if (insiderData[p.simbolo] !== undefined) return;
+      const txs = await getInsiderTransactions(p.simbolo);
+      setInsiderData(prev => ({ ...prev, [p.simbolo]: txs }));
+    });
+  }, [tab, posiciones]);
+
+  // Load FRED data when macro tab becomes active
+  useEffect(() => {
+    if (tab !== 'macro' || !fredKey || Object.keys(fredData).length > 0) return;
+    setFredLoading(true);
+    Promise.all(Object.keys(FRED_SERIES).map(async (id) => {
+      const obs = await getFredSeries(id, fredKey, 12);
+      return [id, obs] as [string, FredObservation[]];
+    })).then(results => {
+      setFredData(Object.fromEntries(results));
+      setFredLoading(false);
+    });
+  }, [tab, fredKey]);
+
+  // Load backtest data when backtest tab becomes active
+  useEffect(() => {
+    if (tab !== 'backtest') return;
+    const missing = selectedIndices.filter(s => !backtestData[s]);
+    if (missing.length === 0) return;
+    setBacktestLoading(true);
+    getMultipleYfHistory(missing, backtestPeriod).then(results => {
+      setBacktestData(prev => ({ ...prev, ...results }));
+      setBacktestLoading(false);
+    });
+  }, [tab, selectedIndices, backtestPeriod]);
 
   // Score: same logic as Inversiones
   const totalValor = posiciones.reduce((s, p) => s + toEur(getPriceOf(p) * p.acciones, p.divisa), 0);
@@ -372,6 +405,67 @@ export default function Analisis() {
                             Conecta Financial Modeling Prep en Ajustes → APIs para ver métricas fundamentales reales
                           </div>
                         )}
+                        {/* Insider Trading */}
+                        {!esFondo && (() => {
+                          const txs = insiderData[p.simbolo];
+                          const signal = txs ? getInsiderSignal(txs) : 'none';
+                          const isExpI = expandedInsider[p.simbolo];
+                          return (
+                            <div style={{ marginTop: 10 }}>
+                              <button onClick={() => setExpandedInsider(prev => ({ ...prev, [p.simbolo]: !isExpI }))}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text2)', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0' }}>
+                                {isExpI ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                                Insider Trading
+                                {txs === undefined ? (
+                                  <span style={{ fontSize: 10, padding: '1px 6px', background: 'rgba(152,152,168,0.1)', borderRadius: 6 }}>cargando…</span>
+                                ) : signal === 'buying' ? (
+                                  <span style={{ fontSize: 10, padding: '1px 6px', background: 'rgba(34,197,94,0.15)', color: 'var(--green)', borderRadius: 6, fontWeight: 700 }}>🟢 Comprando</span>
+                                ) : signal === 'selling' ? (
+                                  <span style={{ fontSize: 10, padding: '1px 6px', background: 'rgba(239,68,68,0.15)', color: 'var(--red)', borderRadius: 6, fontWeight: 700 }}>🔴 Vendiendo</span>
+                                ) : signal === 'mixed' ? (
+                                  <span style={{ fontSize: 10, padding: '1px 6px', background: 'rgba(245,158,11,0.15)', color: 'var(--amber)', borderRadius: 6, fontWeight: 700 }}>🟡 Mixto</span>
+                                ) : (
+                                  <span style={{ fontSize: 10, padding: '1px 6px', background: 'rgba(152,152,168,0.1)', color: 'var(--text2)', borderRadius: 6 }}>Sin actividad</span>
+                                )}
+                              </button>
+                              {isExpI && (
+                                <div style={{ marginTop: 8 }}>
+                                  {!txs || txs.length === 0 ? (
+                                    <div style={{ fontSize: 12, color: 'var(--text2)', padding: '8px 0' }}>Sin transacciones de insiders disponibles.</div>
+                                  ) : (
+                                    <div style={{ overflowX: 'auto' }}>
+                                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                                        <thead>
+                                          <tr style={{ color: 'var(--text2)' }}>
+                                            {['Fecha', 'Directivo', 'Cargo', 'Tipo', 'Acciones', 'Valor'].map(h => (
+                                              <th key={h} style={{ textAlign: 'left', padding: '3px 6px', fontWeight: 600, borderBottom: '1px solid var(--border)' }}>{h}</th>
+                                            ))}
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {txs.slice(0, 6).map((tx, i) => (
+                                            <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                                              <td style={{ padding: '4px 6px' }}>{tx.date.slice(0, 10)}</td>
+                                              <td style={{ padding: '4px 6px', fontWeight: 600 }}>{tx.name}</td>
+                                              <td style={{ padding: '4px 6px', color: 'var(--text2)' }}>{tx.title}</td>
+                                              <td style={{ padding: '4px 6px' }}>
+                                                <span style={{ color: tx.type === 'P' ? 'var(--green)' : tx.type === 'S' ? 'var(--red)' : 'var(--text2)', fontWeight: 700 }}>
+                                                  {tx.type === 'P' ? '▲ Compra' : tx.type === 'S' ? '▼ Venta' : tx.typeFull}
+                                                </span>
+                                              </td>
+                                              <td style={{ padding: '4px 6px', textAlign: 'right' }}>{tx.shares.toLocaleString('es-ES')}</td>
+                                              <td style={{ padding: '4px 6px', textAlign: 'right' }}>${tx.value.toLocaleString('es-ES')}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </>
                     )}
                   </div>
@@ -386,121 +480,243 @@ export default function Analisis() {
       {tab === 'macro' && (
         <>
           <div className="card" style={{ background: 'linear-gradient(135deg, #1e1e2e 0%, #161618 100%)' }}>
-            <div style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 4 }}>Señales macroeconómicas</div>
-            <div style={{ fontSize: 13, color: 'var(--text2)' }}>Indicadores de mercado actualizados para contextualizar tu cartera.</div>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-            {MACRO_SIGNALS.map((s) => (
-              <div key={s.name} className="card">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 6 }}>{s.name}</div>
-                    <div style={{ fontSize: 24, fontWeight: 700, color: s.estado === 'positivo' ? 'var(--green)' : s.estado === 'negativo' ? 'var(--red)' : 'var(--text)' }}>
-                      {s.valor}
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 4 }}>{s.desc}</div>
-                  </div>
-                  <div style={{ padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: s.estado === 'positivo' ? 'rgba(34,197,94,0.15)' : s.estado === 'negativo' ? 'rgba(239,68,68,0.15)' : 'rgba(152,152,168,0.15)', color: s.estado === 'positivo' ? 'var(--green)' : s.estado === 'negativo' ? 'var(--red)' : 'var(--text2)' }}>
-                    {s.estado === 'positivo' ? 'Alcista' : s.estado === 'negativo' ? 'Bajista' : 'Neutral'}
-                  </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Macro Dashboard · FRED (St. Louis Fed)</div>
+                <div style={{ fontSize: 12, color: 'var(--text2)' }}>
+                  {fredKey ? 'Datos reales en tiempo real · caché 24h' : 'Configura tu FRED API Key en Ajustes → APIs para datos reales'}
                 </div>
               </div>
-            ))}
+              {fredKey && (
+                <button className="btn-icon" onClick={() => { setFredLoading(true); setFredData({}); }} title="Actualizar datos FRED">
+                  <RefreshCw size={14} style={{ animation: fredLoading ? 'spin 1s linear infinite' : 'none' }} />
+                </button>
+              )}
+            </div>
           </div>
 
-          <div className="card">
-            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Análisis de contexto</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {[
-                { titulo: 'Política monetaria', texto: 'La Fed mantiene tipos altos para controlar la inflación. Favorece bonos pero penaliza valuaciones de crecimiento.', icono: '🏦' },
-                { titulo: 'Mercado de renta variable', texto: 'Los índices americanos muestran fortaleza YTD. El Nasdaq lidera gracias al rally de IA y tecnología.', icono: '📈' },
-                { titulo: 'Divisas', texto: 'El USD se mantiene fuerte frente al EUR. Tus posiciones en USD tienen exposición cambiaria favorable.', icono: '💱' },
-              ].map(item => (
-                <div key={item.titulo} style={{ display: 'flex', gap: 14, padding: '14px', background: 'var(--bg3)', borderRadius: 10 }}>
-                  <span style={{ fontSize: 24 }}>{item.icono}</span>
-                  <div>
-                    <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 14 }}>{item.titulo}</div>
-                    <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.5 }}>{item.texto}</div>
+          {/* FRED live data */}
+          {fredKey ? (
+            fredLoading ? (
+              <div className="card" style={{ textAlign: 'center', padding: 32, color: 'var(--text2)' }}>
+                <RefreshCw size={20} style={{ animation: 'spin 1s linear infinite', marginBottom: 8 }} />
+                <div>Cargando datos macroeconómicos de FRED…</div>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                {(Object.keys(FRED_SERIES) as (keyof typeof FRED_SERIES)[]).map(id => {
+                  const info = FRED_SERIES[id];
+                  const obs = fredData[id] ?? [];
+                  const last = obs.length > 0 ? obs[obs.length - 1] : null;
+                  const prev = obs.length > 1 ? obs[obs.length - 2] : null;
+                  const signal = last ? getFredSignal(id, obs) : 'neutral';
+                  const change = last && prev ? last.value - prev.value : null;
+                  // Sparkline: last 6 points
+                  const sparkData = obs.slice(-6).map((o, i) => ({ i, v: o.value }));
+                  return (
+                    <div key={id} className="card">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                        <div>
+                          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>{info.icon} {info.name}</div>
+                          <div style={{ fontSize: 22, fontWeight: 800, color: signal === 'positivo' ? 'var(--green)' : signal === 'negativo' ? 'var(--red)' : 'var(--text)' }}>
+                            {last ? formatFredValue(id, last.value) : '—'}
+                          </div>
+                          <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 2 }}>
+                            {last?.date ?? 'sin datos'}
+                            {change !== null && (
+                              <span style={{ marginLeft: 6, color: change >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                                {change >= 0 ? '▲' : '▼'} {Math.abs(change).toFixed(2)}{info.unit}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                          <div style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700, background: signal === 'positivo' ? 'rgba(34,197,94,0.15)' : signal === 'negativo' ? 'rgba(239,68,68,0.15)' : 'rgba(152,152,168,0.12)', color: signal === 'positivo' ? 'var(--green)' : signal === 'negativo' ? 'var(--red)' : 'var(--text2)' }}>
+                            {signal === 'positivo' ? '▲ Alcista' : signal === 'negativo' ? '▼ Bajista' : '→ Neutral'}
+                          </div>
+                          {sparkData.length > 1 && (
+                            <ResponsiveContainer width={70} height={28}>
+                              <LineChart data={sparkData} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
+                                <Line type="monotone" dataKey="v" stroke={signal === 'positivo' ? '#22c55e' : signal === 'negativo' ? '#ef4444' : '#6366f1'} strokeWidth={1.5} dot={false} />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          ) : (
+            /* Static fallback */
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              {MACRO_SIGNALS.map((s) => (
+                <div key={s.name} className="card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 6 }}>{s.name}</div>
+                      <div style={{ fontSize: 24, fontWeight: 700, color: s.estado === 'positivo' ? 'var(--green)' : s.estado === 'negativo' ? 'var(--red)' : 'var(--text)' }}>{s.valor}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 4 }}>{s.desc}</div>
+                    </div>
+                    <div style={{ padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: s.estado === 'positivo' ? 'rgba(34,197,94,0.15)' : s.estado === 'negativo' ? 'rgba(239,68,68,0.15)' : 'rgba(152,152,168,0.15)', color: s.estado === 'positivo' ? 'var(--green)' : s.estado === 'negativo' ? 'var(--red)' : 'var(--text2)' }}>
+                      {s.estado === 'positivo' ? 'Alcista' : s.estado === 'negativo' ? 'Bajista' : 'Neutral'}
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
-          </div>
+          )}
+
+          {/* FRED chart for Fed Funds + 10Y when data available */}
+          {fredKey && fredData['FEDFUNDS'] && fredData['GS10'] && (
+            <div className="card">
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Fed Funds Rate vs Bono 10Y · últimos 12 meses</div>
+              <ResponsiveContainer width="100%" height={180}>
+                <LineChart margin={{ top: 5, right: 10, left: -20, bottom: 0 }}
+                  data={(fredData['FEDFUNDS'] ?? []).map((o, i) => ({
+                    date: o.date.slice(0, 7),
+                    fed: o.value,
+                    gs10: (fredData['GS10'] ?? [])[i]?.value,
+                  }))}>
+                  <XAxis dataKey="date" tick={{ fill: 'var(--text2)', fontSize: 10 }} axisLine={false} tickLine={false} interval={2} />
+                  <YAxis tick={{ fill: 'var(--text2)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11 }} />
+                  <Line type="monotone" dataKey="fed" stroke="#ef4444" strokeWidth={2} dot={false} name="Fed Funds" />
+                  <Line type="monotone" dataKey="gs10" stroke="#3b82f6" strokeWidth={2} dot={false} name="Bono 10Y" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </>
       )}
 
       {/* === BACKTEST === */}
       {tab === 'backtest' && (
         <>
-          <div className="card" style={{ background: 'linear-gradient(135deg, #1e1e2e 0%, #161618 100%)' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
-              <div>
-                <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Retorno cartera (1Y)</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--green)' }}>+28.0%</div>
-              </div>
-              <div>
-                <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Retorno S&P500 (1Y)</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--blue)' }}>+20.0%</div>
-              </div>
-              <div>
-                <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>Alpha</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--green)' }}>+8.0%</div>
-              </div>
-            </div>
-          </div>
-
+          {/* Index selector */}
           <div className="card">
-            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Evolución vs S&P500 (base 100)</div>
-            <ResponsiveContainer width="100%" height={280}>
-              <AreaChart data={BACKTEST_DATA} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorCartera" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorSP" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="mes" tick={{ fill: 'var(--text2)', fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: 'var(--text2)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8 }} labelStyle={{ color: 'var(--text)' }} />
-                <Area type="monotone" dataKey="cartera" stroke="#3b82f6" strokeWidth={2} fill="url(#colorCartera)" name="Mi Cartera" />
-                <Area type="monotone" dataKey="sp500" stroke="#22c55e" strokeWidth={2} fill="url(#colorSP)" name="S&P500" />
-              </AreaChart>
-            </ResponsiveContainer>
-            <div style={{ display: 'flex', gap: 20, marginTop: 12, justifyContent: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-                <div style={{ width: 12, height: 3, background: '#3b82f6', borderRadius: 2 }} />
-                Mi Cartera
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-                <div style={{ width: 12, height: 3, background: '#22c55e', borderRadius: 2 }} />
-                S&P500
-              </div>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Índices de referencia</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+              {BENCHMARK_INDICES.map(idx => {
+                const active = selectedIndices.includes(idx.symbol);
+                return (
+                  <button key={idx.symbol} onClick={() => setSelectedIndices(prev =>
+                    active ? prev.filter(s => s !== idx.symbol) : [...prev, idx.symbol]
+                  )} style={{ padding: '5px 12px', borderRadius: 20, border: `1px solid ${active ? idx.color : 'var(--border)'}`, background: active ? `${idx.color}22` : 'var(--bg3)', color: active ? idx.color : 'var(--text2)', fontSize: 12, cursor: 'pointer', fontWeight: active ? 700 : 400 }}>
+                    {idx.name}
+                  </button>
+                );
+              })}
             </div>
-          </div>
-
-          <div className="card">
-            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Métricas de riesgo</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
-              {[
-                { label: 'Volatilidad anual', value: '18.4%', desc: 'Desviación estándar retornos' },
-                { label: 'Sharpe Ratio', value: '1.52', desc: 'Retorno ajustado por riesgo' },
-                { label: 'Max Drawdown', value: '-8.2%', desc: 'Caída máxima desde pico' },
-                { label: 'Beta vs S&P', value: '1.08', desc: 'Sensibilidad al mercado' },
-                { label: 'Correlación S&P', value: '0.78', desc: 'Diversificación relativa' },
-                { label: 'Días positivos', value: '58%', desc: 'Días con retorno positivo' },
-              ].map(m => (
-                <div key={m.label} style={{ background: 'var(--bg3)', borderRadius: 10, padding: '14px' }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>{m.value}</div>
-                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{m.label}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text2)' }}>{m.desc}</div>
-                </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {(['1y', '5y', '10y'] as const).map(p => (
+                <button key={p} onClick={() => { setBacktestPeriod(p); setBacktestData({}); }} style={{ padding: '4px 12px', borderRadius: 6, border: 'none', background: backtestPeriod === p ? 'var(--blue)' : 'var(--bg3)', color: backtestPeriod === p ? 'white' : 'var(--text2)', fontSize: 12, cursor: 'pointer', fontWeight: backtestPeriod === p ? 700 : 400 }}>
+                  {p === '1y' ? '1 año' : p === '5y' ? '5 años' : '10 años'}
+                </button>
               ))}
+              <button onClick={() => { setBacktestData({}); setBacktestLoading(false); }} style={{ padding: '4px 10px', borderRadius: 6, border: 'none', background: 'var(--bg3)', color: 'var(--text2)', fontSize: 12, cursor: 'pointer', marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <RefreshCw size={11} style={{ animation: backtestLoading ? 'spin 1s linear infinite' : 'none' }} /> Actualizar
+              </button>
             </div>
           </div>
+
+          {backtestLoading ? (
+            <div className="card" style={{ textAlign: 'center', padding: 32, color: 'var(--text2)' }}>
+              <RefreshCw size={20} style={{ animation: 'spin 1s linear infinite', marginBottom: 8 }} />
+              <div>Cargando datos de Yahoo Finance…</div>
+            </div>
+          ) : (
+            <>
+              {/* Combined chart */}
+              {selectedIndices.some(s => backtestData[s]) && (() => {
+                // Align data by date
+                const allDates = [...new Set(selectedIndices.flatMap(s => (backtestData[s]?.points ?? []).map(p => p.date)))].sort();
+                const chartData = allDates.map(date => {
+                  const row: Record<string, unknown> = { date };
+                  selectedIndices.forEach(s => {
+                    const pt = backtestData[s]?.points.find(p => p.date === date);
+                    if (pt) row[s] = pt.idx;
+                  });
+                  return row;
+                });
+                return (
+                  <div className="card">
+                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Comparativa base 100 · {backtestPeriod === '1y' ? '1 año' : backtestPeriod === '5y' ? '5 años' : '10 años'}</div>
+                    <ResponsiveContainer width="100%" height={260}>
+                      <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                        <XAxis dataKey="date" tick={{ fill: 'var(--text2)', fontSize: 10 }} axisLine={false} tickLine={false} interval={Math.floor(chartData.length / 6)} />
+                        <YAxis tick={{ fill: 'var(--text2)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                        <Tooltip contentStyle={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11 }}
+                          formatter={(v: unknown, name: unknown) => {
+                            const sym = String(name ?? '');
+                            const idx = BENCHMARK_INDICES.find(b => b.symbol === sym);
+                            return [`${Number(v).toFixed(1)}`, idx?.name ?? sym];
+                          }} />
+                        <ReferenceLine y={100} stroke="rgba(255,255,255,0.1)" strokeDasharray="4 4" />
+                        {selectedIndices.map(s => {
+                          const idx = BENCHMARK_INDICES.find(b => b.symbol === s);
+                          if (!backtestData[s]) return null;
+                          return <Line key={s} type="monotone" dataKey={s} stroke={idx?.color ?? '#6366f1'} strokeWidth={2} dot={false} name={s} />;
+                        })}
+                      </LineChart>
+                    </ResponsiveContainer>
+                    <div style={{ display: 'flex', gap: 14, marginTop: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+                      {selectedIndices.filter(s => backtestData[s]).map(s => {
+                        const idx = BENCHMARK_INDICES.find(b => b.symbol === s);
+                        return (
+                          <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}>
+                            <div style={{ width: 12, height: 3, background: idx?.color ?? '#6366f1', borderRadius: 2 }} />
+                            <span>{idx?.name ?? s}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Metrics per index */}
+              {selectedIndices.some(s => backtestData[s]) && (
+                <div className="card">
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Métricas comparativas</div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ color: 'var(--text2)', borderBottom: '1px solid var(--border)' }}>
+                          {['Índice', 'Retorno total', 'CAGR', 'Max Drawdown', 'Volatilidad', 'Sharpe'].map(h => (
+                            <th key={h} style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 600 }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedIndices.filter(s => backtestData[s]).map(s => {
+                          const d = backtestData[s]!;
+                          const idx = BENCHMARK_INDICES.find(b => b.symbol === s);
+                          return (
+                            <tr key={s} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                              <td style={{ padding: '8px 10px', fontWeight: 700 }}><span style={{ color: idx?.color ?? 'var(--text)' }}>{idx?.name ?? s}</span></td>
+                              <td style={{ padding: '8px 10px', color: d.metrics.totalReturn >= 0 ? 'var(--green)' : 'var(--red)' }}>{d.metrics.totalReturn >= 0 ? '+' : ''}{d.metrics.totalReturn}%</td>
+                              <td style={{ padding: '8px 10px', color: d.metrics.cagr >= 0 ? 'var(--green)' : 'var(--red)' }}>{d.metrics.cagr >= 0 ? '+' : ''}{d.metrics.cagr}%</td>
+                              <td style={{ padding: '8px 10px', color: 'var(--red)' }}>{d.metrics.maxDrawdown}%</td>
+                              <td style={{ padding: '8px 10px' }}>{d.metrics.volatility}%</td>
+                              <td style={{ padding: '8px 10px', color: d.metrics.sharpe >= 1 ? 'var(--green)' : d.metrics.sharpe >= 0 ? 'var(--amber)' : 'var(--red)' }}>{d.metrics.sharpe}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {selectedIndices.every(s => !backtestData[s]) && !backtestLoading && (
+                <div className="card" style={{ textAlign: 'center', padding: 32, color: 'var(--text2)' }}>
+                  Selecciona al menos un índice para comparar datos reales de Yahoo Finance.
+                </div>
+              )}
+            </>
+          )}
         </>
       )}
       {/* === FISCALIDAD === */}
