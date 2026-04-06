@@ -6,6 +6,7 @@ import { useMercadoStore } from '../stores/useMercadoStore';
 import { useDividendosStore } from '../stores/useDividendosStore';
 import { useInmuebleStore } from '../stores/useInmuebleStore';
 import { useDeudaStore } from '../stores/useDeudaStore';
+import { usePlanesAhorroStore } from '../stores/usePlanesAhorroStore';
 import { useConfigStore } from '../stores/useConfigStore';
 import { getQuote, MOCK_TICKERS } from '../services/alphaVantage';
 import { cgGetPrices, symbolToId, isCryptoSymbol } from '../services/coinGecko';
@@ -66,6 +67,7 @@ export default function Analisis() {
   const { dividendos } = useDividendosStore();
   const { inmuebles } = useInmuebleStore();
   useDeudaStore();
+  const { planes: planesAhorro } = usePlanesAhorroStore();
   const { fmpKey, fredKey } = useConfigStore();
   const [tab, setTab] = useState<'empresas' | 'macro' | 'backtest' | 'fiscalidad'>('empresas');
   const [refreshing, setRefreshing] = useState(false);
@@ -890,6 +892,91 @@ export default function Analisis() {
                       </div>
                     ))}
                   </div>
+                </div>
+              );
+            })()}
+
+            {/* Planes de Ahorro — Fiscalidad */}
+            {planesAhorro.length > 0 && (() => {
+              const now = new Date();
+              const currentYear = now.getFullYear();
+              const ppPlanes = planesAhorro.filter(p => p.tipo === 'Plan de Pensiones' || p.tipo === 'PPA');
+              const piasPlanes = planesAhorro.filter(p => p.tipo === 'PIAS');
+              const ppAportadoEstimado = ppPlanes.reduce((s, p) => {
+                const startYear = parseInt(p.fechaInicio.slice(0, 4));
+                const startMonth = startYear === currentYear ? parseInt(p.fechaInicio.slice(5, 7)) - 1 : 0;
+                const months = now.getMonth() - startMonth + 1;
+                return s + p.aportacionMensual * Math.max(0, months);
+              }, 0);
+              const maxDeduccion = 1500;
+              const restanteDeduccion = Math.max(0, maxDeduccion - ppAportadoEstimado);
+              const tipoMarginalEstimado = 0.19; // conservative
+              const ahorroFiscalEstimado = Math.min(ppAportadoEstimado, maxDeduccion) * tipoMarginalEstimado;
+              return (
+                <div className="card">
+                  <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Fiscalidad — Planes de Ahorro</div>
+                  {ppPlanes.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
+                      <div style={{ background: 'rgba(30,64,175,0.08)', border: '1px solid rgba(30,64,175,0.2)', borderRadius: 10, padding: '12px 14px' }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#3b82f6', marginBottom: 8 }}>🏦 Planes de Pensiones / PPA · Deducción IRPF {currentYear}</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                          <div>
+                            <div style={{ fontSize: 11, color: 'var(--text2)' }}>Aportado este año (est.)</div>
+                            <div style={{ fontSize: 18, fontWeight: 700 }}>{ppAportadoEstimado.toLocaleString('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 11, color: 'var(--text2)' }}>Deducción disponible</div>
+                            <div style={{ fontSize: 18, fontWeight: 700, color: restanteDeduccion > 0 ? 'var(--green)' : 'var(--text2)' }}>
+                              {restanteDeduccion.toLocaleString('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })}
+                            </div>
+                            <div style={{ fontSize: 10, color: 'var(--text2)' }}>de {maxDeduccion.toLocaleString('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })} máx.</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 11, color: 'var(--text2)' }}>Ahorro fiscal est. (19%)</div>
+                            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--green)' }}>
+                              {ahorroFiscalEstimado.toLocaleString('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })}
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ marginTop: 10 }}>
+                          <div style={{ height: 6, background: 'var(--bg2)', borderRadius: 3, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${Math.min((ppAportadoEstimado / maxDeduccion) * 100, 100)}%`, background: '#3b82f6', borderRadius: 3 }} />
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text2)', marginTop: 3 }}>
+                            <span>0€</span>
+                            <span style={{ color: '#3b82f6', fontWeight: 600 }}>{ppAportadoEstimado.toFixed(0)}€ aportado</span>
+                            <span>{maxDeduccion}€ máx.</span>
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 8 }}>
+                          ⚠️ Aportación estimada según pagos mensuales. El rescate tributa como rendimientos del trabajo (tarifa general IRPF).
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {piasPlanes.length > 0 && (
+                    <div style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.2)', borderRadius: 10, padding: '12px 14px', marginBottom: 10 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#7c3aed', marginBottom: 8 }}>🛡️ PIAS · Ventaja fiscal al rescate</div>
+                      {piasPlanes.map(p => {
+                        const años = ((Date.now() - new Date(p.fechaInicio).getTime()) / (1000 * 60 * 60 * 24 * 365)).toFixed(1);
+                        const cumpleCondicion = parseFloat(años) >= 5;
+                        return (
+                          <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'var(--bg3)', borderRadius: 6, fontSize: 12, marginBottom: 4 }}>
+                            <span style={{ fontWeight: 500 }}>{p.nombre}</span>
+                            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                              <span style={{ color: 'var(--text2)' }}>{años} años</span>
+                              <span style={{ fontSize: 10, background: cumpleCondicion ? 'rgba(34,197,94,0.15)' : 'rgba(245,158,11,0.15)', color: cumpleCondicion ? 'var(--green)' : 'var(--amber)', borderRadius: 4, padding: '1px 5px', fontWeight: 600 }}>
+                                {cumpleCondicion ? '✅ Exención posible' : `⏳ ${(5 - parseFloat(años)).toFixed(1)} años restantes`}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 8 }}>
+                        Si el PIAS se mantiene +5 años y se rescata como renta vitalicia, los rendimientos pueden quedar exentos de IRPF.
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })()}

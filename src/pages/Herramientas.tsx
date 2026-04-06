@@ -6,6 +6,7 @@ import { useMercadoStore } from '../stores/useMercadoStore';
 import { useInmuebleStore } from '../stores/useInmuebleStore';
 import { useDeudaStore } from '../stores/useDeudaStore';
 import { useFondoEmergenciaStore } from '../stores/useFondoEmergenciaStore';
+import { usePlanesAhorroStore } from '../stores/usePlanesAhorroStore';
 import { toEur } from '../utils/format';
 import { MOCK_TICKERS } from '../services/alphaVantage';
 import { getAllRates, FALLBACK_RATES } from '../services/exchangeRate';
@@ -287,6 +288,7 @@ function SimuladorFIRE() {
   const { inmuebles } = useInmuebleStore();
   const { deudas } = useDeudaStore();
   const { saldoManual: fondoSaldoManual, cuentaVinculadaId: fondoCuentaId, objetivoActual: fondoObjetivo } = useFondoEmergenciaStore();
+  const { planes: planesAhorro } = usePlanesAhorroStore();
 
   const saldoCuentas = cuentas.reduce((s, c) => s + toEur(c.saldo, c.divisa), 0);
   const valorInversiones = posiciones.reduce((sum, p) => {
@@ -303,6 +305,13 @@ function SimuladorFIRE() {
   }, 0);
   const cuentaFondo = fondoCuentaId ? cuentas.find(c => c.id === fondoCuentaId) : null;
   const saldoFondo = cuentaFondo ? toEur(cuentaFondo.saldo, cuentaFondo.divisa) : fondoSaldoManual;
+  // Plans capital breakdown
+  const capitalPensionesYPPA = planesAhorro
+    .filter(p => p.tipo === 'Plan de Pensiones' || p.tipo === 'PPA')
+    .reduce((s, p) => s + p.valorActual, 0);
+  const capitalLiquidoPlanes = planesAhorro
+    .filter(p => p.tipo === 'PIAS' || p.tipo === 'Seguro de Ahorro')
+    .reduce((s, p) => s + p.valorActual, 0);
   const capitalActual = saldoCuentas + valorInversiones + equityInmuebles;
   const capitalInvertible = Math.max(0, capitalActual - saldoFondo);
 
@@ -418,6 +427,24 @@ function SimuladorFIRE() {
             <div style={{ fontSize: 10, color: 'var(--text2)' }}>objetivo {fmtEur(fondoObjetivo)} · descontado</div>
           </div>
         </div>
+        {(capitalPensionesYPPA > 0 || capitalLiquidoPlanes > 0) && (
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            {capitalPensionesYPPA > 0 && (
+              <div>
+                <div style={{ fontSize: 11, color: '#3b82f6' }}>🏦 PP/PPA (capital jubilación)</div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: '#3b82f6' }}>{fmtEur(capitalPensionesYPPA)}</div>
+                <div style={{ fontSize: 10, color: 'var(--text2)' }}>Disponible al jubilarse</div>
+              </div>
+            )}
+            {capitalLiquidoPlanes > 0 && (
+              <div>
+                <div style={{ fontSize: 11, color: '#7c3aed' }}>🛡️ PIAS / Seguro Ahorro (líquido)</div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: '#7c3aed' }}>{fmtEur(capitalLiquidoPlanes)}</div>
+                <div style={{ fontSize: 10, color: 'var(--text2)' }}>Capital potencialmente exento</div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20 }}>

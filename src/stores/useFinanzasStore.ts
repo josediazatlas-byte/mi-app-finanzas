@@ -19,7 +19,7 @@ export interface Gasto {
   importe: number;
   fecha: string;
   recurrente: boolean;
-  origen?: 'inmobiliario' | 'factura' | 'manual';
+  origen?: 'inmobiliario' | 'factura' | 'manual' | 'plan-ahorro';
   origenId?: string;
 }
 

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, RefreshCw, TrendingUp, TrendingDown, Pencil, X, Trash2, Bot, BarChart2 } from 'lucide-react';
+import PlanesAhorroTab from '../components/PlanesAhorroTab';
+import { usePlanesAhorroStore } from '../stores/usePlanesAhorroStore';
 import { useInversionesStore } from '../stores/useInversionesStore';
 import type { Posicion } from '../stores/useInversionesStore';
 import { useDividendosStore } from '../stores/useDividendosStore';
@@ -664,6 +666,7 @@ function ModalRecomendacion({ posicion, peso, pnlPct, onClose }: { posicion: Pos
 export default function Inversiones() {
   const navigate = useNavigate();
   const { posiciones, removePosicion, pesosObjetivo, updatePesoObjetivo } = useInversionesStore();
+  const { planes } = usePlanesAhorroStore();
   const { dividendos, removeDividendo } = useDividendosStore();
   const { precios, setPrice } = useMercadoStore();
   const [tab, setTab] = useState<'cartera' | 'seguimiento' | 'rebalanceo' | 'dividendos' | 'analisis'>('cartera');
@@ -890,12 +893,15 @@ Pasos específicos que debería tomar esta semana/mes.`;
 
           {/* Sub-tabs */}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <div className="subtabs-container" style={{ display: 'flex', gap: 4, flex: 1 }}>
+            <div className="subtabs-container" style={{ display: 'flex', gap: 4, flex: 1, flexWrap: 'wrap' }}>
               {TIPOS.map(t => (
                 <button key={t} onClick={() => setSubTab(t)} style={{ padding: '6px 14px', borderRadius: 20, border: '1px solid var(--border)', background: subTab === t ? 'var(--blue)' : 'var(--bg2)', color: subTab === t ? 'white' : 'var(--text2)', fontSize: 13, cursor: 'pointer', fontWeight: subTab === t ? 600 : 400, flexShrink: 0 }}>
                   {t} <span style={{ opacity: .7 }}>({byTipo(t).length})</span>
                 </button>
               ))}
+              <button onClick={() => setSubTab('Planes de Ahorro')} style={{ padding: '6px 14px', borderRadius: 20, border: `1px solid ${subTab === 'Planes de Ahorro' ? '#1e40af' : 'var(--border)'}`, background: subTab === 'Planes de Ahorro' ? '#1e40af' : 'var(--bg2)', color: subTab === 'Planes de Ahorro' ? 'white' : 'var(--text2)', fontSize: 13, cursor: 'pointer', fontWeight: subTab === 'Planes de Ahorro' ? 600 : 400, flexShrink: 0 }}>
+                Planes de Ahorro <span style={{ opacity: .7 }}>({planes.length})</span>
+              </button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
               <button className="btn-icon" onClick={refresh} disabled={refreshing} title="Actualizar precios">
@@ -907,15 +913,23 @@ Pasos específicos que debería tomar esta semana/mes.`;
                 </span>
               )}
             </div>
-            <button className="btn-secondary" style={{ gap: 6, padding: '6px 12px', fontSize: 13 }} onClick={analyzeWithAI} disabled={aiLoading} title="Analizar cartera con IA">
-              <Bot size={14} style={{ color: '#a78bfa' }} /> Analizar con IA
-            </button>
-            <button className="btn-primary" style={{ gap: 6 }} onClick={() => setShowModal(true)}>
-              <Plus size={14} /> Añadir
-            </button>
+            {subTab !== 'Planes de Ahorro' && (
+              <>
+                <button className="btn-secondary" style={{ gap: 6, padding: '6px 12px', fontSize: 13 }} onClick={analyzeWithAI} disabled={aiLoading} title="Analizar cartera con IA">
+                  <Bot size={14} style={{ color: '#a78bfa' }} /> Analizar con IA
+                </button>
+                <button className="btn-primary" style={{ gap: 6 }} onClick={() => setShowModal(true)}>
+                  <Plus size={14} /> Añadir
+                </button>
+              </>
+            )}
           </div>
 
+          {/* Planes de Ahorro tab */}
+          {subTab === 'Planes de Ahorro' && <PlanesAhorroTab />}
+
           {/* Positions list */}
+          {subTab !== 'Planes de Ahorro' && (
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
             {byTipo(subTab).length === 0 ? (
               <div style={{ padding: 32, textAlign: 'center', color: 'var(--text2)', fontSize: 14 }}>
@@ -1006,6 +1020,7 @@ Pasos específicos que debería tomar esta semana/mes.`;
               })
             )}
           </div>
+          )}
         </>
       )}
 

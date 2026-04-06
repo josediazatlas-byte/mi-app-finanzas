@@ -10,6 +10,7 @@ import { useDeudaStore } from '../stores/useDeudaStore';
 import { useInmuebleStore } from '../stores/useInmuebleStore';
 import { useFacturasStore } from '../stores/useFacturasStore';
 import { useMetasStore } from '../stores/useMetasStore';
+import { usePlanesAhorroStore } from '../stores/usePlanesAhorroStore';
 import type { Meta, MetaTipo } from '../stores/useMetasStore';
 import { useConfigStore } from '../stores/useConfigStore';
 import { fmtEur, toEur } from '../utils/format';
@@ -116,10 +117,12 @@ function PanelGastos({ gastos, titulo, onClose }: { gastos: Gasto[]; titulo: str
   const [showAdd, setShowAdd] = useState(false);
 
   const handleDelete = (gas: Gasto) => {
+    if (gas.origen === 'plan-ahorro') { toast('Para gestionar este gasto ve a Inversiones → Planes de Ahorro', { icon: '🏦' }); return; }
     if (gas.origen) { toast('Para gestionar este gasto ve a la sección Inmobiliario', { icon: '🏠' }); return; }
     if (window.confirm(`¿Eliminar "${gas.nombre}"?`)) removeGasto(gas.id);
   };
   const handleEdit = (gas: Gasto) => {
+    if (gas.origen === 'plan-ahorro') { toast('Para editar este gasto ve a Inversiones → Planes de Ahorro', { icon: '🏦' }); return; }
     if (gas.origen) { toast('Para editar este gasto ve a la sección Inmobiliario', { icon: '🏠' }); return; }
     setEditItem(gas);
   };
@@ -167,6 +170,7 @@ function PanelGastos({ gastos, titulo, onClose }: { gastos: Gasto[]; titulo: str
                     <div style={{ fontSize: 14, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
                       {gas.nombre}
                       {gas.origen === 'inmobiliario' && <span style={{ fontSize: 9, background: 'rgba(59,130,246,0.15)', color: 'var(--blue)', borderRadius: 4, padding: '1px 4px', fontWeight: 600, flexShrink: 0 }}>🏠 Auto</span>}
+                      {gas.origen === 'plan-ahorro' && <span style={{ fontSize: 9, background: 'rgba(30,64,175,0.15)', color: '#3b82f6', borderRadius: 4, padding: '1px 4px', fontWeight: 600, flexShrink: 0 }}>🏦 Auto·Plan Ahorro</span>}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--text2)' }}>{gas.categoria} · {gas.fecha}{gas.recurrente ? ' · 🔄' : ''}</div>
                   </div>
@@ -284,6 +288,7 @@ function PanelPatrimonio({ onClose }: { onClose: () => void }) {
   const { deudas } = useDeudaStore();
   const { inmuebles } = useInmuebleStore();
   const precios = useMercadoStore((s) => s.precios);
+  const { planes } = usePlanesAhorroStore();
 
   const now = new Date();
   const mesActual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -303,10 +308,12 @@ function PanelPatrimonio({ onClose }: { onClose: () => void }) {
     return s + (hip ? toEur(hip.importePendiente, hip.divisa) : 0);
   }, 0);
   const equityInmuebles = valorInmueblesTotal - hipotecasInmuebles;
+  const valorPlanesAhorro = planes.reduce((s, p) => s + p.valorActual, 0);
 
   const [inclCuentas, setInclCuentas] = useState(true);
   const [inclInversiones, setInclInversiones] = useState(true);
   const [inclInmuebles, setInclInmuebles] = useState(true);
+  const [inclPlanesAhorro, setInclPlanesAhorro] = useState(true);
   const [inclIngresos, setInclIngresos] = useState(true);
   const [inclGastos, setInclGastos] = useState(true);
 
@@ -314,24 +321,26 @@ function PanelPatrimonio({ onClose }: { onClose: () => void }) {
     (inclCuentas ? saldoCuentas : 0) +
     (inclInversiones ? valorInversiones : 0) +
     (inclInmuebles ? equityInmuebles : 0) +
+    (inclPlanesAhorro ? valorPlanesAhorro : 0) +
     (inclIngresos ? ingresosTotal : 0) -
     (inclGastos ? gastosTotal : 0);
 
   const applyScenario = (scenario: string) => {
-    if      (scenario === 'liquidez')       { setInclCuentas(true);  setInclInversiones(false); setInclInmuebles(false); setInclIngresos(false); setInclGastos(false); }
-    else if (scenario === 'inversiones')    { setInclCuentas(false); setInclInversiones(true);  setInclInmuebles(false); setInclIngresos(false); setInclGastos(false); }
-    else if (scenario === 'sinInversiones') { setInclCuentas(true);  setInclInversiones(false); setInclInmuebles(true);  setInclIngresos(true);  setInclGastos(true);  }
-    else                                    { setInclCuentas(true);  setInclInversiones(true);  setInclInmuebles(true);  setInclIngresos(true);  setInclGastos(true);  }
+    if      (scenario === 'liquidez')       { setInclCuentas(true);  setInclInversiones(false); setInclInmuebles(false); setInclPlanesAhorro(false); setInclIngresos(false); setInclGastos(false); }
+    else if (scenario === 'inversiones')    { setInclCuentas(false); setInclInversiones(true);  setInclInmuebles(false); setInclPlanesAhorro(true);  setInclIngresos(false); setInclGastos(false); }
+    else if (scenario === 'sinInversiones') { setInclCuentas(true);  setInclInversiones(false); setInclInmuebles(true);  setInclPlanesAhorro(false); setInclIngresos(true);  setInclGastos(true);  }
+    else                                    { setInclCuentas(true);  setInclInversiones(true);  setInclInmuebles(true);  setInclPlanesAhorro(true);  setInclIngresos(true);  setInclGastos(true);  }
   };
 
-  const COLORS = { cuentas: '#3b82f6', inversiones: '#22c55e', inmuebles: '#f59e0b', ingresos: '#a78bfa', gastos: '#ef4444' };
+  const COLORS = { cuentas: '#3b82f6', inversiones: '#22c55e', inmuebles: '#f59e0b', planesAhorro: '#1e40af', ingresos: '#a78bfa', gastos: '#ef4444' };
 
   const segs = [
-    inclCuentas     && saldoCuentas    > 0 ? { v: saldoCuentas,     c: COLORS.cuentas,     l: 'Cuentas' }     : null,
-    inclInversiones && valorInversiones > 0 ? { v: valorInversiones, c: COLORS.inversiones, l: 'Inversiones' } : null,
-    inclInmuebles   && equityInmuebles  > 0 ? { v: equityInmuebles,  c: COLORS.inmuebles,   l: 'Inmobiliario' } : null,
-    inclIngresos    && ingresosTotal    > 0 ? { v: ingresosTotal,    c: COLORS.ingresos,    l: 'Ingresos' }    : null,
-    inclGastos      && gastosTotal      > 0 ? { v: gastosTotal,      c: COLORS.gastos,      l: 'Gastos' }      : null,
+    inclCuentas      && saldoCuentas      > 0 ? { v: saldoCuentas,      c: COLORS.cuentas,      l: 'Cuentas' }          : null,
+    inclInversiones  && valorInversiones  > 0 ? { v: valorInversiones,  c: COLORS.inversiones,  l: 'Inversiones' }      : null,
+    inclInmuebles    && equityInmuebles   > 0 ? { v: equityInmuebles,   c: COLORS.inmuebles,    l: 'Inmobiliario' }     : null,
+    inclPlanesAhorro && valorPlanesAhorro > 0 ? { v: valorPlanesAhorro, c: COLORS.planesAhorro, l: 'Planes de ahorro' } : null,
+    inclIngresos     && ingresosTotal     > 0 ? { v: ingresosTotal,     c: COLORS.ingresos,     l: 'Ingresos' }         : null,
+    inclGastos       && gastosTotal       > 0 ? { v: gastosTotal,       c: COLORS.gastos,       l: 'Gastos' }           : null,
   ].filter((x): x is { v: number; c: string; l: string } => x !== null);
 
   const chartTotal = segs.reduce((s, x) => s + x.v, 0);
@@ -403,11 +412,12 @@ function PanelPatrimonio({ onClose }: { onClose: () => void }) {
           <div style={{ background: 'var(--bg3)', borderRadius: 10, padding: '12px 16px' }}>
             <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Incluir en el cálculo</div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <ToggleSwitch checked={inclCuentas}     onChange={setInclCuentas}     label={'Cuentas\nbancarias'} color={COLORS.cuentas} />
-              <ToggleSwitch checked={inclInversiones} onChange={setInclInversiones} label={'Inversiones'}        color={COLORS.inversiones} />
-              <ToggleSwitch checked={inclInmuebles}   onChange={setInclInmuebles}   label={'Inmobiliario'}       color={COLORS.inmuebles} />
-              <ToggleSwitch checked={inclIngresos}    onChange={setInclIngresos}    label={'Ingresos\ndel mes'}  color={COLORS.ingresos} />
-              <ToggleSwitch checked={inclGastos}      onChange={setInclGastos}      label={'Gastos\ndel mes'}    color={COLORS.gastos} />
+              <ToggleSwitch checked={inclCuentas}      onChange={setInclCuentas}      label={'Cuentas\nbancarias'} color={COLORS.cuentas} />
+              <ToggleSwitch checked={inclInversiones}  onChange={setInclInversiones}  label={'Inversiones'}        color={COLORS.inversiones} />
+              <ToggleSwitch checked={inclInmuebles}    onChange={setInclInmuebles}    label={'Inmobiliario'}       color={COLORS.inmuebles} />
+              <ToggleSwitch checked={inclPlanesAhorro} onChange={setInclPlanesAhorro} label={'Planes\nahorro'}     color={COLORS.planesAhorro} />
+              <ToggleSwitch checked={inclIngresos}     onChange={setInclIngresos}     label={'Ingresos\ndel mes'}  color={COLORS.ingresos} />
+              <ToggleSwitch checked={inclGastos}       onChange={setInclGastos}       label={'Gastos\ndel mes'}    color={COLORS.gastos} />
             </div>
           </div>
 
@@ -532,6 +542,34 @@ function PanelPatrimonio({ onClose }: { onClose: () => void }) {
                         </div>
                       );
                     })}
+                  </div>
+                </div>
+              )}
+
+              {inclPlanesAhorro && valorPlanesAhorro > 0 && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: 2, background: COLORS.planesAhorro, flexShrink: 0 }} />
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>Planes de ahorro</span>
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.planesAhorro }}>{fmtEur(valorPlanesAhorro)}</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {planes.map((p) => (
+                      <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'var(--bg3)', borderRadius: 6, fontSize: 13 }}>
+                        <div>
+                          <span style={{ fontWeight: 500 }}>{p.nombre}</span>
+                          <span style={{ color: 'var(--text2)', fontSize: 11, marginLeft: 6 }}>{p.tipo}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontWeight: 600 }}>{fmtEur(p.valorActual)}</span>
+                          <span style={{ color: 'var(--text2)', fontSize: 11, minWidth: 36, textAlign: 'right' }}>
+                            {valorPlanesAhorro > 0 ? ((p.valorActual / valorPlanesAhorro) * 100).toFixed(1) : '0.0'}%
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -996,6 +1034,7 @@ export default function Inicio() {
   const navigate = useNavigate();
   const { cuentas, ingresos, gastos } = useFinanzasStore();
   const { posiciones } = useInversionesStore();
+  const { planes: planesAhorro } = usePlanesAhorroStore();
   const { objetivoFinanciero, setObjetivoFinanciero } = usePatrimonioStore();
   const { snapshots, addSnapshot } = useHistoricoStore();
   const { deudas } = useDeudaStore();
@@ -1043,7 +1082,8 @@ export default function Inicio() {
   const equityInmuebles = valorInmueblesTotal - hipotecasInmuebles;
   const otrasDeudas = deudas.reduce((s, d) => s + toEur(d.importePendiente, d.divisa), 0) - hipotecasInmuebles;
   const totalPasivos = deudas.reduce((s, d) => s + toEur(d.importePendiente, d.divisa), 0);
-  const patrimonioNeto = saldoCuentas + valorInversiones + equityInmuebles - otrasDeudas;
+  const valorPlanesAhorro = planesAhorro.reduce((s, p) => s + p.valorActual, 0);
+  const patrimonioNeto = saldoCuentas + valorInversiones + equityInmuebles + valorPlanesAhorro - otrasDeudas;
 
   const loadAIInsights = async () => {
     if (!anthropicKey) { toast.error('Añade tu API key de Anthropic en Ajustes → General'); return; }
