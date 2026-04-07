@@ -1,3 +1,4 @@
+// v2.1 - Planes de Ahorro incluido
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
