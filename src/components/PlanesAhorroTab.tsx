@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Pencil, Trash2, X, AlertTriangle } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, AlertTriangle, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePlanesAhorroStore } from '../stores/usePlanesAhorroStore';
 import type { PlanAhorro, TipoPlan, EntidadPlan } from '../stores/usePlanesAhorroStore';
@@ -13,6 +13,47 @@ const PLAN_TIPOS: TipoPlan[] = [
 const PLAN_ENTIDADES: EntidadPlan[] = [
   'Mapfre', 'AXA', 'Allianz', 'Mutua', 'BBVA', 'CaixaBank', 'Santander', 'Indexa', 'Otro',
 ];
+
+// ——— Catálogo de planes por entidad ———
+interface PlanCatalogo {
+  nombre: string;
+  codigo: string;
+  tipo: TipoPlan;
+  perfil: string;
+}
+
+const CATALOGO: Partial<Record<EntidadPlan, PlanCatalogo[]>> = {
+  CaixaBank: [
+    { nombre: 'CABK Destino 2025',        codigo: 'N4830', tipo: 'Plan de Pensiones', perfil: 'Renta Fija' },
+    { nombre: 'CABK Destino 2030',        codigo: 'N5087', tipo: 'Plan de Pensiones', perfil: 'Renta Mixta' },
+    { nombre: 'CABK Destino 2035',        codigo: 'N5088', tipo: 'Plan de Pensiones', perfil: 'Renta Mixta' },
+    { nombre: 'CABK Destino 2040',        codigo: 'N5085', tipo: 'Plan de Pensiones', perfil: 'Renta Mixta' },
+    { nombre: 'CABK Destino 2050',        codigo: 'N5086', tipo: 'Plan de Pensiones', perfil: 'Renta Mixta' },
+    { nombre: 'CABK Destino (sin fecha)', codigo: 'N5089', tipo: 'Plan de Pensiones', perfil: 'Renta Mixta' },
+    { nombre: 'CABK RV Internacional',    codigo: 'N1767', tipo: 'Plan de Pensiones', perfil: 'Renta Variable' },
+    { nombre: 'CABK Equilibrio',          codigo: 'N0072', tipo: 'Plan de Pensiones', perfil: 'Renta Mixta' },
+    { nombre: 'CABK Crecimiento',         codigo: 'N0042', tipo: 'Plan de Pensiones', perfil: 'Renta Mixta' },
+    { nombre: 'CABK Monetario',           codigo: 'N5303', tipo: 'Plan de Pensiones', perfil: 'Monetario' },
+  ],
+  Santander: [
+    { nombre: 'Santander Futuro 2030',    codigo: 'N4XXX', tipo: 'Plan de Pensiones', perfil: 'Renta Mixta' },
+    { nombre: 'Santander Renta Fija',     codigo: 'N3XXX', tipo: 'Plan de Pensiones', perfil: 'Renta Fija' },
+    { nombre: 'Santander Bolsa',          codigo: 'N3XXX', tipo: 'Plan de Pensiones', perfil: 'Renta Variable' },
+    { nombre: 'Santander Mixto',          codigo: 'N3XXX', tipo: 'Plan de Pensiones', perfil: 'Renta Mixta' },
+    { nombre: 'Santander PPA Garantizado', codigo: 'N3XXX', tipo: 'PPA',             perfil: 'Garantizado' },
+  ],
+};
+
+const PERFILES_INVERSION = ['Renta Fija', 'Renta Mixta', 'Renta Variable', 'Monetario', 'Garantizado', 'Otro'];
+
+const PERFIL_COLOR: Record<string, string> = {
+  'Renta Fija':     '#22c55e',
+  'Renta Mixta':    '#f59e0b',
+  'Renta Variable': '#3b82f6',
+  'Monetario':      '#06b6d4',
+  'Garantizado':    '#a78bfa',
+  'Otro':           '#6b7280',
+};
 
 export const PLAN_TIPO_COLOR: Record<TipoPlan, string> = {
   'Plan de Pensiones': '#1e40af',
@@ -43,6 +84,7 @@ function ModalPlanAhorro({ plan, onClose }: { plan?: PlanAhorro; onClose: () => 
     tipo: (plan?.tipo ?? 'Plan de Pensiones') as TipoPlan,
     entidad: (plan?.entidad ?? 'Otro') as EntidadPlan,
     numeroPoliza: plan?.numeroPoliza ?? '',
+    perfilInversion: plan?.perfilInversion ?? '',
     fechaInicio: plan?.fechaInicio ?? new Date().toISOString().slice(0, 10),
     aportacionMensual: plan?.aportacionMensual ?? 0,
     aportacionTotal: plan?.aportacionTotal ?? 0,
@@ -53,7 +95,45 @@ function ModalPlanAhorro({ plan, onClose }: { plan?: PlanAhorro; onClose: () => 
     notas: plan?.notas ?? '',
   });
 
+  // Estado de selección de catálogo
+  const [autoDetected, setAutoDetected] = useState(false);
+  const [modoManual, setModoManual] = useState(
+    // Si es edición y hay datos previos, empezar en manual
+    isEdit ? true : false
+  );
+
   const upd = (k: string, v: unknown) => setForm(f => ({ ...f, [k]: v }));
+
+  const catalogoEntidad = CATALOGO[form.entidad];
+  const usaCatalogo = !!catalogoEntidad && !modoManual;
+
+  // Al cambiar entidad: resetear modo manual y auto-detección
+  const handleEntidadChange = (nueva: EntidadPlan) => {
+    setForm(f => ({ ...f, entidad: nueva }));
+    setAutoDetected(false);
+    setModoManual(false);
+  };
+
+  // Al seleccionar un plan del catálogo
+  const handleSelectCatalogo = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    if (val === 'MANUAL') {
+      setModoManual(true);
+      setAutoDetected(false);
+      return;
+    }
+    const idx = parseInt(val);
+    if (isNaN(idx)) return;
+    const entry = catalogoEntidad![idx];
+    setForm(f => ({
+      ...f,
+      nombre: entry.nombre,
+      tipo: entry.tipo,
+      numeroPoliza: entry.codigo,
+      perfilInversion: entry.perfil,
+    }));
+    setAutoDetected(true);
+  };
 
   const rentabilidad =
     form.aportacionTotal > 0
@@ -61,7 +141,6 @@ function ModalPlanAhorro({ plan, onClose }: { plan?: PlanAhorro; onClose: () => 
       : 0;
   const pnl = form.valorActual - form.aportacionTotal;
 
-  // Projection to vencimiento using historical return rate
   const proyeccion = (() => {
     if (!form.vencimiento || form.valorActual <= 0) return null;
     const ahora = Date.now();
@@ -70,18 +149,15 @@ function ModalPlanAhorro({ plan, onClose }: { plan?: PlanAhorro; onClose: () => 
     const inicio = new Date(form.fechaInicio).getTime();
     const mesesTranscurridos = Math.max(1, (ahora - inicio) / (1000 * 60 * 60 * 24 * 30));
     const mesesRestantes = (venc - ahora) / (1000 * 60 * 60 * 24 * 30);
-    const tasaMensual =
-      rentabilidad > 0
-        ? Math.pow(1 + rentabilidad / 100, 1 / mesesTranscurridos) - 1
-        : 0.003;
+    const tasaMensual = rentabilidad > 0
+      ? Math.pow(1 + rentabilidad / 100, 1 / mesesTranscurridos) - 1
+      : 0.003;
     return (
       form.valorActual * Math.pow(1 + tasaMensual, mesesRestantes) +
-      form.aportacionMensual *
-        ((Math.pow(1 + tasaMensual, mesesRestantes) - 1) / Math.max(tasaMensual, 0.0001))
+      form.aportacionMensual * ((Math.pow(1 + tasaMensual, mesesRestantes) - 1) / Math.max(tasaMensual, 0.0001))
     );
   })();
 
-  // Años hasta vencimiento
   const añosVenc = form.vencimiento
     ? ((new Date(form.vencimiento).getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 365)).toFixed(1)
     : null;
@@ -95,6 +171,7 @@ function ModalPlanAhorro({ plan, onClose }: { plan?: PlanAhorro; onClose: () => 
       tipo: form.tipo,
       entidad: form.entidad,
       numeroPoliza: form.numeroPoliza || undefined,
+      perfilInversion: form.perfilInversion || undefined,
       fechaInicio: form.fechaInicio,
       aportacionMensual: Number(form.aportacionMensual) || 0,
       aportacionTotal: Number(form.aportacionTotal) || 0,
@@ -105,7 +182,6 @@ function ModalPlanAhorro({ plan, onClose }: { plan?: PlanAhorro; onClose: () => 
       notas: form.notas || undefined,
     };
 
-    // Find existing auto-gasto linked to this plan
     const existingGasto = isEdit
       ? gastos.find(g => g.origen === 'plan-ahorro' && g.origenId === plan!.id)
       : undefined;
@@ -114,20 +190,9 @@ function ModalPlanAhorro({ plan, onClose }: { plan?: PlanAhorro; onClose: () => 
       updatePlan(plan!.id, data);
       if (data.aportacionMensual > 0) {
         if (existingGasto) {
-          updateGasto(existingGasto.id, {
-            nombre: `Aportación - ${data.nombre}`,
-            importe: data.aportacionMensual,
-          });
+          updateGasto(existingGasto.id, { nombre: `Aportación - ${data.nombre}`, importe: data.aportacionMensual });
         } else {
-          addGasto({
-            categoria: 'Otros',
-            nombre: `Aportación - ${data.nombre}`,
-            importe: data.aportacionMensual,
-            fecha: new Date().toISOString().slice(0, 10),
-            recurrente: true,
-            origen: 'plan-ahorro',
-            origenId: plan!.id,
-          });
+          addGasto({ categoria: 'Otros', nombre: `Aportación - ${data.nombre}`, importe: data.aportacionMensual, fecha: new Date().toISOString().slice(0, 10), recurrente: true, origen: 'plan-ahorro', origenId: plan!.id });
         }
       } else if (existingGasto) {
         removeGasto(existingGasto.id);
@@ -136,15 +201,7 @@ function ModalPlanAhorro({ plan, onClose }: { plan?: PlanAhorro; onClose: () => 
     } else {
       const newId = addPlan(data);
       if (data.aportacionMensual > 0) {
-        addGasto({
-          categoria: 'Otros',
-          nombre: `Aportación - ${data.nombre}`,
-          importe: data.aportacionMensual,
-          fecha: new Date().toISOString().slice(0, 10),
-          recurrente: true,
-          origen: 'plan-ahorro',
-          origenId: newId,
-        });
+        addGasto({ categoria: 'Otros', nombre: `Aportación - ${data.nombre}`, importe: data.aportacionMensual, fecha: new Date().toISOString().slice(0, 10), recurrente: true, origen: 'plan-ahorro', origenId: newId });
       }
       toast.success('Plan añadido');
     }
@@ -160,9 +217,74 @@ function ModalPlanAhorro({ plan, onClose }: { plan?: PlanAhorro; onClose: () => 
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* Tipo selector */}
+
+          {/* ── Entidad gestora ── */}
           <div>
-            <label className="label">Tipo de plan *</label>
+            <label className="label">Entidad gestora</label>
+            <select
+              className="select"
+              value={form.entidad}
+              onChange={e => handleEntidadChange(e.target.value as EntidadPlan)}
+            >
+              {PLAN_ENTIDADES.map(e => <option key={e}>{e}</option>)}
+            </select>
+          </div>
+
+          {/* ── Selector de catálogo (CaixaBank / Santander) ── */}
+          {usaCatalogo && (
+            <div>
+              <label className="label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                Selecciona tu plan
+                <span style={{ fontSize: 10, background: 'rgba(59,130,246,0.15)', color: '#3b82f6', borderRadius: 4, padding: '1px 6px', fontWeight: 600 }}>
+                  Catálogo {form.entidad}
+                </span>
+              </label>
+              <select
+                className="select"
+                defaultValue=""
+                onChange={handleSelectCatalogo}
+              >
+                <option value="" disabled>— Elige un plan —</option>
+                {catalogoEntidad!.map((p, i) => (
+                  <option key={i} value={i}>
+                    {p.nombre} · {p.perfil} [{p.codigo}]
+                  </option>
+                ))}
+                <option value="MANUAL">✏️ Mi plan no aparece en la lista</option>
+              </select>
+              {/* Opción "mi plan no aparece" */}
+              {/* Detectamos si se eligió MANUAL en el onChange */}
+            </div>
+          )}
+
+          {/* Enlace "mi plan no aparece" para entidades con catálogo */}
+          {catalogoEntidad && !modoManual && (
+            <button
+              style={{ background: 'none', border: 'none', color: 'var(--text2)', fontSize: 12, cursor: 'pointer', textAlign: 'left', padding: 0, textDecoration: 'underline' }}
+              onClick={() => { setModoManual(true); setAutoDetected(false); }}
+            >
+              ✏️ Mi plan no aparece en la lista → introducir manualmente
+            </button>
+          )}
+
+          {/* Badge de detección automática */}
+          {autoDetected && (
+            <div style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)', borderRadius: 8, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#3b82f6' }}>
+              <Sparkles size={13} />
+              <span>Tipo de plan, código y perfil detectados automáticamente del catálogo.</span>
+            </div>
+          )}
+
+          {/* ── Tipo de plan ── */}
+          <div>
+            <label className="label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              Tipo de plan *
+              {autoDetected && (
+                <span style={{ fontSize: 10, background: 'rgba(59,130,246,0.15)', color: '#3b82f6', borderRadius: 4, padding: '1px 6px', fontWeight: 600 }}>
+                  Auto-detectado
+                </span>
+              )}
+            </label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
               {PLAN_TIPOS.map(t => {
                 const col = PLAN_TIPO_COLOR[t];
@@ -170,7 +292,7 @@ function ModalPlanAhorro({ plan, onClose }: { plan?: PlanAhorro; onClose: () => 
                 return (
                   <button
                     key={t}
-                    onClick={() => upd('tipo', t)}
+                    onClick={() => { upd('tipo', t); setAutoDetected(false); }}
                     style={{
                       padding: '8px 6px',
                       borderRadius: 8,
@@ -181,6 +303,8 @@ function ModalPlanAhorro({ plan, onClose }: { plan?: PlanAhorro; onClose: () => 
                       fontWeight: selected ? 700 : 400,
                       cursor: 'pointer',
                       textAlign: 'center',
+                      boxShadow: selected && autoDetected ? `0 0 0 2px ${col}55` : 'none',
+                      transition: 'all .15s',
                     }}
                   >
                     <div style={{ fontSize: 16, marginBottom: 2 }}>{PLAN_TIPO_ICON[t]}</div>
@@ -191,33 +315,100 @@ function ModalPlanAhorro({ plan, onClose }: { plan?: PlanAhorro; onClose: () => 
             </div>
           </div>
 
-          {/* Nombre + Entidad */}
+          {/* ── Perfil de inversión ── */}
+          <div>
+            <label className="label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              Perfil de inversión
+              {autoDetected && form.perfilInversion && (
+                <span style={{ fontSize: 10, background: 'rgba(59,130,246,0.15)', color: '#3b82f6', borderRadius: 4, padding: '1px 6px', fontWeight: 600 }}>
+                  Auto-detectado
+                </span>
+              )}
+            </label>
+            {autoDetected && form.perfilInversion ? (
+              // Mostrar como chip resaltado si fue auto-detectado
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{
+                  background: `${PERFIL_COLOR[form.perfilInversion] ?? '#6b7280'}18`,
+                  border: `1px solid ${PERFIL_COLOR[form.perfilInversion] ?? '#6b7280'}44`,
+                  borderRadius: 8,
+                  padding: '8px 14px',
+                  color: PERFIL_COLOR[form.perfilInversion] ?? '#6b7280',
+                  fontWeight: 700,
+                  fontSize: 13,
+                  flex: 1,
+                }}>
+                  {form.perfilInversion}
+                </div>
+                <button
+                  style={{ background: 'none', border: 'none', color: 'var(--text2)', fontSize: 11, cursor: 'pointer', padding: '0 4px', textDecoration: 'underline' }}
+                  onClick={() => setAutoDetected(false)}
+                >
+                  Cambiar
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {PERFILES_INVERSION.map(p => {
+                  const col = PERFIL_COLOR[p] ?? '#6b7280';
+                  const selected = form.perfilInversion === p;
+                  return (
+                    <button
+                      key={p}
+                      onClick={() => upd('perfilInversion', selected ? '' : p)}
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: 20,
+                        border: `1px solid ${selected ? col : 'var(--border)'}`,
+                        background: selected ? `${col}18` : 'var(--bg3)',
+                        color: selected ? col : 'var(--text2)',
+                        fontSize: 11,
+                        fontWeight: selected ? 700 : 400,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {p}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* ── Nombre + Código/póliza ── */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label className="label">Nombre del plan *</label>
-              <input className="input" value={form.nombre} onChange={e => upd('nombre', e.target.value)} placeholder="Mi plan de pensiones" />
+              <input
+                className="input"
+                value={form.nombre}
+                onChange={e => upd('nombre', e.target.value)}
+                placeholder="Mi plan de pensiones"
+                style={autoDetected ? { borderColor: 'rgba(59,130,246,0.4)', background: 'rgba(59,130,246,0.04)' } : {}}
+              />
             </div>
             <div>
-              <label className="label">Entidad gestora</label>
-              <select className="select" value={form.entidad} onChange={e => upd('entidad', e.target.value)}>
-                {PLAN_ENTIDADES.map(e => <option key={e}>{e}</option>)}
-              </select>
+              <label className="label">Código DGS / Nº póliza</label>
+              <input
+                className="input"
+                value={form.numeroPoliza}
+                onChange={e => upd('numeroPoliza', e.target.value)}
+                placeholder="N4830 / P-12345"
+                style={autoDetected ? { borderColor: 'rgba(59,130,246,0.4)', background: 'rgba(59,130,246,0.04)' } : {}}
+              />
             </div>
           </div>
 
-          {/* Nº póliza + Fecha inicio */}
+          {/* Fecha inicio */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div>
-              <label className="label">Nº de póliza (opcional)</label>
-              <input className="input" value={form.numeroPoliza} onChange={e => upd('numeroPoliza', e.target.value)} placeholder="P-12345678" />
-            </div>
             <div>
               <label className="label">Fecha de inicio *</label>
               <input className="input" type="date" value={form.fechaInicio} onChange={e => upd('fechaInicio', e.target.value)} />
             </div>
+            <div>{/* espacio */}</div>
           </div>
 
-          {/* Aportaciones */}
+          {/* ── Aportaciones ── */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label className="label">Aportación mensual (€)</label>
@@ -229,7 +420,7 @@ function ModalPlanAhorro({ plan, onClose }: { plan?: PlanAhorro; onClose: () => 
             </div>
           </div>
 
-          {/* Valor actual + fecha */}
+          {/* ── Valor actual + fecha ── */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label className="label">Valor actual (€)</label>
@@ -241,7 +432,7 @@ function ModalPlanAhorro({ plan, onClose }: { plan?: PlanAhorro; onClose: () => 
             </div>
           </div>
 
-          {/* Auto-calculated P&L */}
+          {/* P&L calculado */}
           {form.aportacionTotal > 0 && form.valorActual > 0 && (
             <div style={{ background: pnl >= 0 ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', border: `1px solid ${pnl >= 0 ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'}`, borderRadius: 8, padding: '10px 14px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div>
@@ -259,7 +450,7 @@ function ModalPlanAhorro({ plan, onClose }: { plan?: PlanAhorro; onClose: () => 
             </div>
           )}
 
-          {/* Vencimiento */}
+          {/* ── Vencimiento ── */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label className="label">Fecha de vencimiento (opcional)</label>
@@ -275,7 +466,7 @@ function ModalPlanAhorro({ plan, onClose }: { plan?: PlanAhorro; onClose: () => 
             )}
           </div>
 
-          {/* Proyección a vencimiento */}
+          {/* Proyección */}
           {proyeccion !== null && (
             <div style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 8, padding: '10px 14px' }}>
               <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 4 }}>Proyección a vencimiento (rentabilidad histórica)</div>
@@ -303,7 +494,7 @@ function ModalPlanAhorro({ plan, onClose }: { plan?: PlanAhorro; onClose: () => 
 
           {form.aportacionMensual > 0 && (
             <div style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: 'var(--text2)' }}>
-              💡 Se registrará un gasto recurrente de <strong>{fmtEur(form.aportacionMensual)}/mes</strong> con badge "Auto·Plan Ahorro" en la sección Finanzas.
+              💡 Se registrará un gasto recurrente de <strong>{fmtEur(form.aportacionMensual)}/mes</strong> en la sección Finanzas.
             </div>
           )}
 
@@ -531,6 +722,11 @@ export default function PlanesAhorroTab() {
                     <span style={{ fontSize: 10, background: `${col}18`, color: col, border: `1px solid ${col}44`, borderRadius: 4, padding: '1px 5px', fontWeight: 600, flexShrink: 0 }}>
                       {plan.tipo}
                     </span>
+                    {plan.perfilInversion && (
+                      <span style={{ fontSize: 10, background: `${PERFIL_COLOR[plan.perfilInversion] ?? '#6b7280'}18`, color: PERFIL_COLOR[plan.perfilInversion] ?? '#6b7280', border: `1px solid ${PERFIL_COLOR[plan.perfilInversion] ?? '#6b7280'}44`, borderRadius: 4, padding: '1px 5px', fontWeight: 600, flexShrink: 0 }}>
+                        {plan.perfilInversion}
+                      </span>
+                    )}
                     {diasSinActualizar !== null && diasSinActualizar >= 180 && (
                       <span style={{ fontSize: 9, background: 'rgba(245,158,11,0.15)', color: 'var(--amber)', borderRadius: 4, padding: '1px 4px', fontWeight: 600 }}>
                         ⚠️ Sin actualizar

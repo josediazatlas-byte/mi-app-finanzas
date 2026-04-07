@@ -26,6 +26,7 @@ export interface PlanAhorro {
   tipo: TipoPlan;
   entidad: EntidadPlan;
   numeroPoliza?: string;
+  perfilInversion?: string;
   fechaInicio: string;
   aportacionMensual: number;
   aportacionTotal: number;
