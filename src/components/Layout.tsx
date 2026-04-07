@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { BarChart3, Home, TrendingUp, Wrench, Settings, X, Bell, FileDown, FileText, MessageSquare, LogOut, Cloud, CloudOff, Loader2, CheckCircle2, Eye, EyeOff } from 'lucide-react';
+import { BarChart3, Home, TrendingUp, Wrench, Settings, X, Bell, FileDown, FileText, MessageSquare, LogOut, Cloud, CloudOff, Loader2, CheckCircle2, Eye, EyeOff, BookOpen } from 'lucide-react';
 import InstallBanner from './InstallBanner';
 import OfflineBanner from './OfflineBanner';
 import DriveRestoreModal from './DriveRestoreModal';
@@ -38,6 +38,7 @@ const nav = [
   { to: '/', label: 'Inicio', icon: Home, exact: true },
   { to: '/finanzas', label: 'Finanzas', icon: BarChart3 },
   { to: '/inversiones', label: 'Inversiones', icon: TrendingUp },
+  { to: '/fondos', label: 'Fondos', icon: BookOpen },
   { to: '/analisis', label: 'Análisis', icon: BarChart3 },
   { to: '/herramientas', label: 'Herramientas', icon: Wrench },
   { to: '/documentos', label: 'Documentos', icon: FileText },

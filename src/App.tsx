@@ -13,6 +13,7 @@ import Inversiones from './pages/Inversiones';
 import Analisis from './pages/Analisis';
 import Herramientas from './pages/Herramientas';
 import Documentos from './pages/Documentos';
+import Fondos from './pages/Fondos';
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -86,6 +87,7 @@ export default function App() {
           <Route path="/" element={<Inicio />} />
           <Route path="/finanzas" element={<Finanzas />} />
           <Route path="/inversiones" element={<Inversiones />} />
+          <Route path="/fondos" element={<Fondos />} />
           <Route path="/analisis" element={<Analisis />} />
           <Route path="/herramientas" element={<Herramientas />} />
           <Route path="/documentos" element={<Documentos />} />
