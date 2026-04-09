@@ -4,6 +4,13 @@ import { useAuth } from '../hooks/useAuth'
 
 type Tab = 'login' | 'register'
 
+interface FieldErrors {
+  nombre?: string
+  email?: string
+  password?: string
+  confirm?: string
+}
+
 export default function Auth() {
   const { signIn, signUp, resetPassword } = useAuth()
   const [tab, setTab] = useState<Tab>('login')
@@ -13,6 +20,7 @@ export default function Auth() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [showReset, setShowReset] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
 
   // Login
   const [loginEmail, setLoginEmail] = useState('')
@@ -27,20 +35,53 @@ export default function Auth() {
   // Reset
   const [resetEmail, setResetEmail] = useState('')
 
-  function clearMessages() { setError(''); setSuccess('') }
+  function clearMessages() {
+    setError('')
+    setSuccess('')
+    setFieldErrors({})
+  }
+
+  function validateRegister(): boolean {
+    const errors: FieldErrors = {}
+
+    if (!nombre.trim()) {
+      errors.nombre = 'El nombre es obligatorio.'
+    }
+
+    if (!regEmail.trim()) {
+      errors.email = 'El email es obligatorio.'
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regEmail)) {
+      errors.email = 'Introduce un email con formato válido.'
+    }
+
+    if (!regPassword) {
+      errors.password = 'La contraseña es obligatoria.'
+    } else if (regPassword.length < 8) {
+      errors.password = 'La contraseña debe tener al menos 8 caracteres.'
+    }
+
+    if (!regConfirm) {
+      errors.confirm = 'Debes confirmar la contraseña.'
+    } else if (regPassword !== regConfirm) {
+      errors.confirm = 'Las contraseñas no coinciden.'
+    }
+
+    setFieldErrors(errors)
+    return Object.keys(errors).length === 0
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     clearMessages()
     setLoading(true)
-    const { error } = await signIn(loginEmail, loginPassword)
-    if (error) {
-      if (error.message.includes('Invalid login credentials')) {
+    const { error: err } = await signIn(loginEmail, loginPassword)
+    if (err) {
+      if (err.message.includes('Invalid login credentials')) {
         setError('Email o contraseña incorrectos.')
-      } else if (error.message.includes('Email not confirmed')) {
-        setError('Confirma tu email antes de iniciar sesión.')
+      } else if (err.message.includes('Email not confirmed')) {
+        setError('Confirma tu email antes de iniciar sesión. Revisa tu bandeja de entrada.')
       } else {
-        setError(error.message)
+        setError(err.message)
       }
     }
     setLoading(false)
@@ -49,18 +90,19 @@ export default function Auth() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
     clearMessages()
-    if (regPassword !== regConfirm) { setError('Las contraseñas no coinciden.'); return }
-    if (regPassword.length < 6) { setError('La contraseña debe tener al menos 6 caracteres.'); return }
+    if (!validateRegister()) return
     setLoading(true)
-    const { error } = await signUp(regEmail, regPassword, nombre)
-    if (error) {
-      if (error.message.includes('already registered')) {
-        setError('Este email ya está registrado.')
+    const { error: err } = await signUp(regEmail, regPassword, nombre)
+    if (err) {
+      if (err.message.includes('already registered') || err.message.includes('User already registered')) {
+        setFieldErrors({ email: 'Este email ya está registrado.' })
+      } else if (err.message.includes('invalid') && err.message.toLowerCase().includes('email')) {
+        setFieldErrors({ email: 'El formato del email no es válido.' })
       } else {
-        setError(error.message)
+        setError(err.message)
       }
     } else {
-      setSuccess('¡Cuenta creada! Revisa tu email para confirmar tu cuenta antes de iniciar sesión.')
+      setSuccess('¡Cuenta creada! Te hemos enviado un email de confirmación. Revisa tu bandeja de entrada antes de iniciar sesión.')
     }
     setLoading(false)
   }
@@ -69,9 +111,9 @@ export default function Auth() {
     e.preventDefault()
     clearMessages()
     setLoading(true)
-    const { error } = await resetPassword(resetEmail)
-    if (error) {
-      setError(error.message)
+    const { error: err } = await resetPassword(resetEmail)
+    if (err) {
+      setError(err.message)
     } else {
       setSuccess('Email de recuperación enviado. Revisa tu bandeja de entrada.')
     }
@@ -83,6 +125,10 @@ export default function Auth() {
     borderRadius: 10, padding: '11px 14px 11px 42px', color: 'var(--text)',
     fontSize: 14, outline: 'none', boxSizing: 'border-box',
   }
+  const inputErrorStyle: React.CSSProperties = {
+    ...inputStyle,
+    border: '1px solid var(--red)',
+  }
   const iconStyle: React.CSSProperties = {
     position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)',
     color: 'var(--text2)', pointerEvents: 'none',
@@ -92,6 +138,9 @@ export default function Auth() {
     border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 600,
     cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1,
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+  }
+  const fieldErrorStyle: React.CSSProperties = {
+    color: 'var(--red)', fontSize: 12, marginTop: 4, display: 'block',
   }
 
   return (
@@ -236,7 +285,7 @@ export default function Auth() {
                   {error && <div style={{ color: 'var(--red)', fontSize: 13, marginBottom: 14, padding: '8px 12px', background: 'rgba(239,68,68,0.1)', borderRadius: 8 }}>{error}</div>}
                   <button type="submit" style={btnPrimary} disabled={loading}>
                     {loading ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : null}
-                    Entrar
+                    {loading ? 'Entrando...' : 'Entrar'}
                   </button>
                   <button
                     type="button"
@@ -250,37 +299,39 @@ export default function Auth() {
 
               {/* Register form */}
               {tab === 'register' && (
-                <form onSubmit={handleRegister}>
+                <form onSubmit={handleRegister} noValidate>
                   <div style={{ marginBottom: 14 }}>
                     <label style={{ fontSize: 13, color: 'var(--text2)', display: 'block', marginBottom: 6 }}>Nombre</label>
                     <div style={{ position: 'relative' }}>
                       <User size={16} style={iconStyle} />
                       <input
-                        type="text" placeholder="Tu nombre" required
-                        value={nombre} onChange={e => setNombre(e.target.value)}
-                        style={inputStyle}
+                        type="text" placeholder="Tu nombre"
+                        value={nombre} onChange={e => { setNombre(e.target.value); setFieldErrors(fe => ({ ...fe, nombre: undefined })) }}
+                        style={fieldErrors.nombre ? inputErrorStyle : inputStyle}
                       />
                     </div>
+                    {fieldErrors.nombre && <span style={fieldErrorStyle}>{fieldErrors.nombre}</span>}
                   </div>
                   <div style={{ marginBottom: 14 }}>
                     <label style={{ fontSize: 13, color: 'var(--text2)', display: 'block', marginBottom: 6 }}>Email</label>
                     <div style={{ position: 'relative' }}>
                       <Mail size={16} style={iconStyle} />
                       <input
-                        type="email" placeholder="tu@email.com" required
-                        value={regEmail} onChange={e => setRegEmail(e.target.value)}
-                        style={inputStyle}
+                        type="email" placeholder="tu@email.com"
+                        value={regEmail} onChange={e => { setRegEmail(e.target.value); setFieldErrors(fe => ({ ...fe, email: undefined })) }}
+                        style={fieldErrors.email ? inputErrorStyle : inputStyle}
                       />
                     </div>
+                    {fieldErrors.email && <span style={fieldErrorStyle}>{fieldErrors.email}</span>}
                   </div>
                   <div style={{ marginBottom: 14 }}>
                     <label style={{ fontSize: 13, color: 'var(--text2)', display: 'block', marginBottom: 6 }}>Contraseña</label>
                     <div style={{ position: 'relative' }}>
                       <Lock size={16} style={iconStyle} />
                       <input
-                        type={showPwd ? 'text' : 'password'} placeholder="Mínimo 6 caracteres" required
-                        value={regPassword} onChange={e => setRegPassword(e.target.value)}
-                        style={{ ...inputStyle, paddingRight: 42 }}
+                        type={showPwd ? 'text' : 'password'} placeholder="Mínimo 8 caracteres"
+                        value={regPassword} onChange={e => { setRegPassword(e.target.value); setFieldErrors(fe => ({ ...fe, password: undefined })) }}
+                        style={{ ...(fieldErrors.password ? inputErrorStyle : inputStyle), paddingRight: 42 }}
                       />
                       <button
                         type="button" onClick={() => setShowPwd(!showPwd)}
@@ -289,15 +340,16 @@ export default function Auth() {
                         {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
+                    {fieldErrors.password && <span style={fieldErrorStyle}>{fieldErrors.password}</span>}
                   </div>
                   <div style={{ marginBottom: 18 }}>
                     <label style={{ fontSize: 13, color: 'var(--text2)', display: 'block', marginBottom: 6 }}>Confirmar contraseña</label>
                     <div style={{ position: 'relative' }}>
                       <Lock size={16} style={iconStyle} />
                       <input
-                        type={showPwd2 ? 'text' : 'password'} placeholder="Repite la contraseña" required
-                        value={regConfirm} onChange={e => setRegConfirm(e.target.value)}
-                        style={{ ...inputStyle, paddingRight: 42 }}
+                        type={showPwd2 ? 'text' : 'password'} placeholder="Repite la contraseña"
+                        value={regConfirm} onChange={e => { setRegConfirm(e.target.value); setFieldErrors(fe => ({ ...fe, confirm: undefined })) }}
+                        style={{ ...(fieldErrors.confirm ? inputErrorStyle : inputStyle), paddingRight: 42 }}
                       />
                       <button
                         type="button" onClick={() => setShowPwd2(!showPwd2)}
@@ -306,12 +358,13 @@ export default function Auth() {
                         {showPwd2 ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
+                    {fieldErrors.confirm && <span style={fieldErrorStyle}>{fieldErrors.confirm}</span>}
                   </div>
                   {error && <div style={{ color: 'var(--red)', fontSize: 13, marginBottom: 14, padding: '8px 12px', background: 'rgba(239,68,68,0.1)', borderRadius: 8 }}>{error}</div>}
                   {success && <div style={{ color: 'var(--green)', fontSize: 13, marginBottom: 14, padding: '8px 12px', background: 'rgba(34,197,94,0.1)', borderRadius: 8 }}>{success}</div>}
                   <button type="submit" style={btnPrimary} disabled={loading}>
                     {loading ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : null}
-                    Crear cuenta
+                    {loading ? 'Creando cuenta...' : 'Crear cuenta'}
                   </button>
                 </form>
               )}

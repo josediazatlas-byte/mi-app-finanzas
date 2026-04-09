@@ -2,6 +2,19 @@ import { useState, useEffect } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 
+const SESSION_TIMEOUT_MS = 24 * 60 * 60 * 1000 // 24 hours
+const LAST_ACTIVITY_KEY = 'last-activity'
+
+function updateLastActivity() {
+  localStorage.setItem(LAST_ACTIVITY_KEY, Date.now().toString())
+}
+
+function isSessionExpired(): boolean {
+  const last = localStorage.getItem(LAST_ACTIVITY_KEY)
+  if (!last) return false
+  return Date.now() - parseInt(last, 10) > SESSION_TIMEOUT_MS
+}
+
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
@@ -20,8 +33,37 @@ export function useAuth() {
     return () => subscription.unsubscribe()
   }, [])
 
+  // Session timeout: sign out after 24h of inactivity
+  useEffect(() => {
+    if (!user) return
+
+    // Check if session is already expired on mount (e.g. app reopened after long pause)
+    if (isSessionExpired()) {
+      supabase.auth.signOut()
+      return
+    }
+
+    // Track user activity
+    updateLastActivity()
+    const activityEvents = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click']
+    activityEvents.forEach(e => window.addEventListener(e, updateLastActivity, { passive: true }))
+
+    // Check timeout every 5 minutes
+    const interval = setInterval(() => {
+      if (isSessionExpired()) {
+        supabase.auth.signOut()
+      }
+    }, 5 * 60 * 1000)
+
+    return () => {
+      activityEvents.forEach(e => window.removeEventListener(e, updateLastActivity))
+      clearInterval(interval)
+    }
+  }, [user])
+
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (!error) updateLastActivity()
     return { error }
   }
 
@@ -35,6 +77,7 @@ export function useAuth() {
   }
 
   const signOut = async () => {
+    localStorage.removeItem(LAST_ACTIVITY_KEY)
     await supabase.auth.signOut()
   }
 
