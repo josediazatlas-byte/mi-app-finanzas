@@ -19,6 +19,11 @@ import type { Suscripcion } from '../stores/useSuscripcionesStore'
 import type { Cliente } from '../stores/useClientesStore'
 import type { Factura } from '../stores/useFacturasStore'
 import type { Inmueble } from '../stores/useInmuebleStore'
+import type { Deuda } from '../stores/useDeudaStore'
+import type { Presupuesto } from '../stores/usePresupuestoStore'
+import type { Dividendo } from '../stores/useDividendosStore'
+import type { AutonomoProfile } from '../stores/useConfigStore'
+import type { HistorialEntry } from '../stores/useFondoEmergenciaStore'
 
 // ─── Sync status store ───────────────────────────────────────────────────────
 
@@ -341,22 +346,35 @@ export async function loadUserData(userId: string): Promise<boolean> {
         const da = cfg.datos_autonomo as Row
         if (da.perfil !== undefined) {
           // New format: datos_autonomo contains nested stores
-          useConfigStore.setState({ autonomo: da.perfil as never })
+          useConfigStore.setState({ autonomo: da.perfil as AutonomoProfile })
           if (Array.isArray(da.deudas) && da.deudas.length > 0) {
-            useDeudaStore.setState({ deudas: da.deudas as never })
+            useDeudaStore.setState({ deudas: da.deudas as Deuda[] })
           }
           if (Array.isArray(da.presupuestos) && da.presupuestos.length > 0) {
-            usePresupuestoStore.setState({ presupuestos: da.presupuestos as never })
+            usePresupuestoStore.setState({ presupuestos: da.presupuestos as Presupuesto[] })
           }
           if (Array.isArray(da.dividendos) && da.dividendos.length > 0) {
-            useDividendosStore.setState({ dividendos: da.dividendos as never })
+            useDividendosStore.setState({ dividendos: da.dividendos as Dividendo[] })
           }
           if (da.fondo_emergencia) {
-            useFondoEmergenciaStore.setState(da.fondo_emergencia as never)
+            const fe = da.fondo_emergencia as {
+              objetivoActual?: number; saldoManual?: number; cuentaVinculadaId?: string | null;
+              extraMensual?: number; mesesACubrir?: number; historialObjetivos?: HistorialEntry[];
+              fechaUltimaActualizacion?: string;
+            }
+            useFondoEmergenciaStore.setState({
+              objetivoActual: fe.objetivoActual ?? 0,
+              saldoManual: fe.saldoManual ?? 0,
+              cuentaVinculadaId: fe.cuentaVinculadaId ?? null,
+              extraMensual: fe.extraMensual ?? 1000,
+              mesesACubrir: fe.mesesACubrir ?? 6,
+              historialObjetivos: fe.historialObjetivos ?? [],
+              fechaUltimaActualizacion: fe.fechaUltimaActualizacion ?? '',
+            })
           }
         } else {
           // Old format: datos_autonomo was the AutonomoProfile directly
-          useConfigStore.setState({ autonomo: cfg.datos_autonomo as never })
+          useConfigStore.setState({ autonomo: cfg.datos_autonomo as AutonomoProfile })
         }
       }
       if (cfg.api_keys) {
@@ -373,8 +391,7 @@ export async function loadUserData(userId: string): Promise<boolean> {
     setStatus('synced')
     setLastSync(new Date().toISOString())
     return true
-  } catch (err) {
-    console.error('Error loading from Supabase:', err)
+  } catch {
     setStatus('error')
     return false
   } finally {
@@ -458,8 +475,7 @@ export async function saveAllData(userId: string): Promise<void> {
 
     setStatus('synced')
     setLastSync(new Date().toISOString())
-  } catch (err) {
-    console.error('Error saving to Supabase:', err)
+  } catch {
     setStatus('error')
   }
 }

@@ -11,6 +11,59 @@ interface FieldErrors {
   confirm?: string
 }
 
+const RATE_LIMIT_KEY = 'login_attempts'
+const MAX_ATTEMPTS = 5
+const BLOCK_DURATION_MS = 15 * 60 * 1000 // 15 minutes
+
+interface LoginAttempts {
+  count: number
+  firstAttemptTs: number
+  blockedUntil?: number
+}
+
+function getLoginAttempts(): LoginAttempts {
+  try {
+    const raw = sessionStorage.getItem(RATE_LIMIT_KEY)
+    if (!raw) return { count: 0, firstAttemptTs: Date.now() }
+    return JSON.parse(raw) as LoginAttempts
+  } catch {
+    return { count: 0, firstAttemptTs: Date.now() }
+  }
+}
+
+function recordFailedAttempt(): LoginAttempts {
+  const current = getLoginAttempts()
+  const now = Date.now()
+  // Reset window if more than 15 min since first attempt
+  if (now - current.firstAttemptTs > BLOCK_DURATION_MS) {
+    const fresh = { count: 1, firstAttemptTs: now }
+    sessionStorage.setItem(RATE_LIMIT_KEY, JSON.stringify(fresh))
+    return fresh
+  }
+  const updated: LoginAttempts = {
+    count: current.count + 1,
+    firstAttemptTs: current.firstAttemptTs,
+  }
+  if (updated.count >= MAX_ATTEMPTS) {
+    updated.blockedUntil = now + BLOCK_DURATION_MS
+  }
+  sessionStorage.setItem(RATE_LIMIT_KEY, JSON.stringify(updated))
+  return updated
+}
+
+function clearLoginAttempts() {
+  sessionStorage.removeItem(RATE_LIMIT_KEY)
+}
+
+function isRateLimited(): { limited: boolean; minutesLeft?: number } {
+  const attempts = getLoginAttempts()
+  if (attempts.blockedUntil && Date.now() < attempts.blockedUntil) {
+    const minutesLeft = Math.ceil((attempts.blockedUntil - Date.now()) / 60000)
+    return { limited: true, minutesLeft }
+  }
+  return { limited: false }
+}
+
 export default function Auth() {
   const { signIn, signUp, resetPassword } = useAuth()
   const [tab, setTab] = useState<Tab>('login')
@@ -73,16 +126,32 @@ export default function Auth() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     clearMessages()
+
+    // Check rate limit before attempting login
+    const rateCheck = isRateLimited()
+    if (rateCheck.limited) {
+      setError(`Demasiados intentos fallidos. Espera ${rateCheck.minutesLeft} minuto${rateCheck.minutesLeft !== 1 ? 's' : ''} antes de intentarlo de nuevo.`)
+      return
+    }
+
     setLoading(true)
     const { error: err } = await signIn(loginEmail, loginPassword)
     if (err) {
       if (err.message.includes('Invalid login credentials')) {
-        setError('Email o contraseña incorrectos.')
+        const attempts = recordFailedAttempt()
+        const remaining = MAX_ATTEMPTS - attempts.count
+        if (attempts.blockedUntil) {
+          setError(`Demasiados intentos fallidos. Cuenta bloqueada por 15 minutos.`)
+        } else {
+          setError(`Email o contraseña incorrectos.${remaining > 0 ? ` Te quedan ${remaining} intento${remaining !== 1 ? 's' : ''}.` : ''}`)
+        }
       } else if (err.message.includes('Email not confirmed')) {
         setError('Confirma tu email antes de iniciar sesión. Revisa tu bandeja de entrada.')
       } else {
-        setError(err.message)
+        setError('Error al iniciar sesión. Inténtalo de nuevo.')
       }
+    } else {
+      clearLoginAttempts()
     }
     setLoading(false)
   }
@@ -99,7 +168,7 @@ export default function Auth() {
       } else if (err.message.includes('invalid') && err.message.toLowerCase().includes('email')) {
         setFieldErrors({ email: 'El formato del email no es válido.' })
       } else {
-        setError(err.message)
+        setError('Error al crear la cuenta. Inténtalo de nuevo.')
       }
     } else {
       setSuccess('¡Cuenta creada! Te hemos enviado un email de confirmación. Revisa tu bandeja de entrada antes de iniciar sesión.')
@@ -113,7 +182,7 @@ export default function Auth() {
     setLoading(true)
     const { error: err } = await resetPassword(resetEmail)
     if (err) {
-      setError(err.message)
+      setError('No se pudo enviar el email de recuperación. Comprueba la dirección e inténtalo de nuevo.')
     } else {
       setSuccess('Email de recuperación enviado. Revisa tu bandeja de entrada.')
     }

@@ -274,9 +274,8 @@ export default function Layout() {
       const imgH = (canvas.height * imgW) / canvas.width;
       pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, imgW, imgH);
       pdf.save(`mi-app-finanzas-${new Date().toISOString().slice(0, 10)}.pdf`);
-    } catch (e) {
-      console.error(e);
-      alert('Error al generar PDF. Asegúrate de tener instalado jspdf y html2canvas.');
+    } catch {
+      alert('Error al generar el PDF. Inténtalo de nuevo.');
     }
   };
 

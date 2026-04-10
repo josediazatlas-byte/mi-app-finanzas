@@ -14,7 +14,6 @@ export function fmtUsd(n: number): string {
 
 // Hardcoded fallback values (used if store not yet initialized)
 export const USD_TO_EUR = 0.92;
-export const USD_TO_GBP = 0.79;
 
 export function toEur(amount: number, divisa: string): number {
   if (divisa === 'EUR') return amount;
