@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, RefreshCw, TrendingUp, TrendingDown, Pencil, X, Trash2, Bot, BarChart2 } from 'lucide-react';
 import PlanesAhorroTab from '../components/PlanesAhorroTab';
+import MetalesTab from '../components/MetalesTab';
 import { usePlanesAhorroStore } from '../stores/usePlanesAhorroStore';
+import { useMetalesPreciososStore } from '../stores/useMetalesPreciososStore';
 import { useInversionesStore } from '../stores/useInversionesStore';
 import type { Posicion } from '../stores/useInversionesStore';
 import { useDividendosStore } from '../stores/useDividendosStore';
@@ -667,6 +669,7 @@ export default function Inversiones() {
   const navigate = useNavigate();
   const { posiciones, removePosicion, pesosObjetivo, updatePesoObjetivo } = useInversionesStore();
   const { planes } = usePlanesAhorroStore();
+  const { posiciones: metales } = useMetalesPreciososStore();
   const { dividendos, removeDividendo } = useDividendosStore();
   const { precios, setPrice } = useMercadoStore();
   const [tab, setTab] = useState<'cartera' | 'seguimiento' | 'rebalanceo' | 'dividendos' | 'analisis'>('cartera');
@@ -902,6 +905,9 @@ Pasos específicos que debería tomar esta semana/mes.`;
               <button onClick={() => setSubTab('Planes de Ahorro')} style={{ padding: '6px 14px', borderRadius: 20, border: `1px solid ${subTab === 'Planes de Ahorro' ? '#1e40af' : 'var(--border)'}`, background: subTab === 'Planes de Ahorro' ? '#1e40af' : 'var(--bg2)', color: subTab === 'Planes de Ahorro' ? 'white' : 'var(--text2)', fontSize: 13, cursor: 'pointer', fontWeight: subTab === 'Planes de Ahorro' ? 600 : 400, flexShrink: 0 }}>
                 Planes de Ahorro <span style={{ opacity: .7 }}>({planes.length})</span>
               </button>
+              <button onClick={() => setSubTab('Metales')} style={{ padding: '6px 14px', borderRadius: 20, border: `1px solid ${subTab === 'Metales' ? '#FFD700' : 'var(--border)'}`, background: subTab === 'Metales' ? 'rgba(255,215,0,0.15)' : 'var(--bg2)', color: subTab === 'Metales' ? '#FFD700' : 'var(--text2)', fontSize: 13, cursor: 'pointer', fontWeight: subTab === 'Metales' ? 600 : 400, flexShrink: 0 }}>
+                Metales <span style={{ opacity: .7 }}>({metales.length})</span>
+              </button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
               <button className="btn-icon" onClick={refresh} disabled={refreshing} title="Actualizar precios">
@@ -913,7 +919,7 @@ Pasos específicos que debería tomar esta semana/mes.`;
                 </span>
               )}
             </div>
-            {subTab !== 'Planes de Ahorro' && (
+            {subTab !== 'Planes de Ahorro' && subTab !== 'Metales' && (
               <>
                 <button className="btn-secondary" style={{ gap: 6, padding: '6px 12px', fontSize: 13 }} onClick={analyzeWithAI} disabled={aiLoading} title="Analizar cartera con IA">
                   <Bot size={14} style={{ color: '#a78bfa' }} /> Analizar con IA
@@ -928,8 +934,11 @@ Pasos específicos que debería tomar esta semana/mes.`;
           {/* Planes de Ahorro tab */}
           {subTab === 'Planes de Ahorro' && <PlanesAhorroTab />}
 
+          {/* Metales tab */}
+          {subTab === 'Metales' && <MetalesTab />}
+
           {/* Positions list */}
-          {subTab !== 'Planes de Ahorro' && (
+          {subTab !== 'Planes de Ahorro' && subTab !== 'Metales' && (
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
             {byTipo(subTab).length === 0 ? (
               <div style={{ padding: 32, textAlign: 'center', color: 'var(--text2)', fontSize: 14 }}>

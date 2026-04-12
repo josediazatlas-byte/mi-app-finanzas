@@ -20,6 +20,7 @@ import { buildFinancialContext, callClaudeAPI, SYSTEM_PROMPT } from '../utils/ai
 import { getFearAndGreed } from '../services/financialModelingPrep';
 import FondoEmergenciaWidget from '../components/FondoEmergencia';
 import { useFondoEmergenciaStore } from '../stores/useFondoEmergenciaStore';
+import { useMetalesPreciososStore, FALLBACK_PRICES } from '../stores/useMetalesPreciososStore';
 import ModalIngreso from '../components/ModalIngreso';
 import ModalGasto from '../components/ModalGasto';
 import ModalAddPosicion from '../components/ModalAddPosicion';
@@ -289,6 +290,7 @@ function PanelPatrimonio({ onClose }: { onClose: () => void }) {
   const { inmuebles } = useInmuebleStore();
   const precios = useMercadoStore((s) => s.precios);
   const { planes } = usePlanesAhorroStore();
+  const { posiciones: metales, precios: preciosMetales } = useMetalesPreciososStore();
 
   const now = new Date();
   const mesActual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -309,11 +311,17 @@ function PanelPatrimonio({ onClose }: { onClose: () => void }) {
   }, 0);
   const equityInmuebles = valorInmueblesTotal - hipotecasInmuebles;
   const valorPlanesAhorro = planes.reduce((s, p) => s + p.valorActual, 0);
+  const usdEurRate = useMercadoStore.getState().exchangeRates?.USD_EUR ?? 0.92;
+  const valorMetales = metales.reduce((s, m) => {
+    const precio = preciosMetales[m.metal] ?? FALLBACK_PRICES[m.metal];
+    return s + precio * m.cantidad * usdEurRate;
+  }, 0);
 
   const [inclCuentas, setInclCuentas] = useState(true);
   const [inclInversiones, setInclInversiones] = useState(true);
   const [inclInmuebles, setInclInmuebles] = useState(true);
   const [inclPlanesAhorro, setInclPlanesAhorro] = useState(true);
+  const [inclMetales, setInclMetales] = useState(true);
   const [inclIngresos, setInclIngresos] = useState(true);
   const [inclGastos, setInclGastos] = useState(true);
 
@@ -322,23 +330,25 @@ function PanelPatrimonio({ onClose }: { onClose: () => void }) {
     (inclInversiones ? valorInversiones : 0) +
     (inclInmuebles ? equityInmuebles : 0) +
     (inclPlanesAhorro ? valorPlanesAhorro : 0) +
+    (inclMetales ? valorMetales : 0) +
     (inclIngresos ? ingresosTotal : 0) -
     (inclGastos ? gastosTotal : 0);
 
   const applyScenario = (scenario: string) => {
-    if      (scenario === 'liquidez')       { setInclCuentas(true);  setInclInversiones(false); setInclInmuebles(false); setInclPlanesAhorro(false); setInclIngresos(false); setInclGastos(false); }
-    else if (scenario === 'inversiones')    { setInclCuentas(false); setInclInversiones(true);  setInclInmuebles(false); setInclPlanesAhorro(true);  setInclIngresos(false); setInclGastos(false); }
-    else if (scenario === 'sinInversiones') { setInclCuentas(true);  setInclInversiones(false); setInclInmuebles(true);  setInclPlanesAhorro(false); setInclIngresos(true);  setInclGastos(true);  }
-    else                                    { setInclCuentas(true);  setInclInversiones(true);  setInclInmuebles(true);  setInclPlanesAhorro(true);  setInclIngresos(true);  setInclGastos(true);  }
+    if      (scenario === 'liquidez')       { setInclCuentas(true);  setInclInversiones(false); setInclInmuebles(false); setInclPlanesAhorro(false); setInclMetales(false); setInclIngresos(false); setInclGastos(false); }
+    else if (scenario === 'inversiones')    { setInclCuentas(false); setInclInversiones(true);  setInclInmuebles(false); setInclPlanesAhorro(true);  setInclMetales(true);  setInclIngresos(false); setInclGastos(false); }
+    else if (scenario === 'sinInversiones') { setInclCuentas(true);  setInclInversiones(false); setInclInmuebles(true);  setInclPlanesAhorro(false); setInclMetales(false); setInclIngresos(true);  setInclGastos(true);  }
+    else                                    { setInclCuentas(true);  setInclInversiones(true);  setInclInmuebles(true);  setInclPlanesAhorro(true);  setInclMetales(true);  setInclIngresos(true);  setInclGastos(true);  }
   };
 
-  const COLORS = { cuentas: '#3b82f6', inversiones: '#22c55e', inmuebles: '#f59e0b', planesAhorro: '#1e40af', ingresos: '#a78bfa', gastos: '#ef4444' };
+  const COLORS = { cuentas: '#3b82f6', inversiones: '#22c55e', inmuebles: '#f59e0b', planesAhorro: '#1e40af', metales: '#FFD700', ingresos: '#a78bfa', gastos: '#ef4444' };
 
   const segs = [
     inclCuentas      && saldoCuentas      > 0 ? { v: saldoCuentas,      c: COLORS.cuentas,      l: 'Cuentas' }          : null,
     inclInversiones  && valorInversiones  > 0 ? { v: valorInversiones,  c: COLORS.inversiones,  l: 'Inversiones' }      : null,
     inclInmuebles    && equityInmuebles   > 0 ? { v: equityInmuebles,   c: COLORS.inmuebles,    l: 'Inmobiliario' }     : null,
     inclPlanesAhorro && valorPlanesAhorro > 0 ? { v: valorPlanesAhorro, c: COLORS.planesAhorro, l: 'Planes de ahorro' } : null,
+    inclMetales      && valorMetales      > 0 ? { v: valorMetales,      c: COLORS.metales,      l: 'Metales preciosos' } : null,
     inclIngresos     && ingresosTotal     > 0 ? { v: ingresosTotal,     c: COLORS.ingresos,     l: 'Ingresos' }         : null,
     inclGastos       && gastosTotal       > 0 ? { v: gastosTotal,       c: COLORS.gastos,       l: 'Gastos' }           : null,
   ].filter((x): x is { v: number; c: string; l: string } => x !== null);
@@ -416,6 +426,7 @@ function PanelPatrimonio({ onClose }: { onClose: () => void }) {
               <ToggleSwitch checked={inclInversiones}  onChange={setInclInversiones}  label={'Inversiones'}        color={COLORS.inversiones} />
               <ToggleSwitch checked={inclInmuebles}    onChange={setInclInmuebles}    label={'Inmobiliario'}       color={COLORS.inmuebles} />
               <ToggleSwitch checked={inclPlanesAhorro} onChange={setInclPlanesAhorro} label={'Planes\nahorro'}     color={COLORS.planesAhorro} />
+              <ToggleSwitch checked={inclMetales}      onChange={setInclMetales}      label={'Metales\npreciosos'} color={COLORS.metales} />
               <ToggleSwitch checked={inclIngresos}     onChange={setInclIngresos}     label={'Ingresos\ndel mes'}  color={COLORS.ingresos} />
               <ToggleSwitch checked={inclGastos}       onChange={setInclGastos}       label={'Gastos\ndel mes'}    color={COLORS.gastos} />
             </div>
@@ -570,6 +581,38 @@ function PanelPatrimonio({ onClose }: { onClose: () => void }) {
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {inclMetales && valorMetales > 0 && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: 2, background: COLORS.metales, flexShrink: 0 }} />
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>Metales preciosos</span>
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.metales }}>{fmtEur(valorMetales)}</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {metales.map((m) => {
+                      const precio = preciosMetales[m.metal] ?? FALLBACK_PRICES[m.metal];
+                      const valor = precio * m.cantidad * usdEurRate;
+                      return (
+                        <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'var(--bg3)', borderRadius: 6, fontSize: 13 }}>
+                          <div>
+                            <span style={{ fontWeight: 500 }}>{m.nombre}</span>
+                            <span style={{ color: 'var(--text2)', fontSize: 11, marginLeft: 6 }}>{m.formato} · {m.cantidadDisplay} {m.unidad}</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontWeight: 600 }}>{fmtEur(valor)}</span>
+                            <span style={{ color: 'var(--text2)', fontSize: 11, minWidth: 36, textAlign: 'right' }}>
+                              {valorMetales > 0 ? ((valor / valorMetales) * 100).toFixed(1) : '0.0'}%
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -1035,6 +1078,7 @@ export default function Inicio() {
   const { cuentas, ingresos, gastos } = useFinanzasStore();
   const { posiciones } = useInversionesStore();
   const { planes: planesAhorro } = usePlanesAhorroStore();
+  const { posiciones: metalesPreciosos, precios: preciosMetalesPreciosos } = useMetalesPreciososStore();
   const { objetivoFinanciero, setObjetivoFinanciero } = usePatrimonioStore();
   const { snapshots, addSnapshot } = useHistoricoStore();
   const { deudas } = useDeudaStore();
@@ -1083,7 +1127,12 @@ export default function Inicio() {
   const otrasDeudas = deudas.reduce((s, d) => s + toEur(d.importePendiente, d.divisa), 0) - hipotecasInmuebles;
   const totalPasivos = deudas.reduce((s, d) => s + toEur(d.importePendiente, d.divisa), 0);
   const valorPlanesAhorro = planesAhorro.reduce((s, p) => s + p.valorActual, 0);
-  const patrimonioNeto = saldoCuentas + valorInversiones + equityInmuebles + valorPlanesAhorro - otrasDeudas;
+  const usdEurRateMain = useMercadoStore.getState().exchangeRates?.USD_EUR ?? 0.92;
+  const valorMetalesPreciosos = metalesPreciosos.reduce((s, m) => {
+    const precio = preciosMetalesPreciosos[m.metal] ?? FALLBACK_PRICES[m.metal];
+    return s + precio * m.cantidad * usdEurRateMain;
+  }, 0);
+  const patrimonioNeto = saldoCuentas + valorInversiones + equityInmuebles + valorPlanesAhorro + valorMetalesPreciosos - otrasDeudas;
 
   const loadAIInsights = async () => {
     if (!anthropicKey) { toast.error('Añade tu API key de Anthropic en Ajustes → General'); return; }

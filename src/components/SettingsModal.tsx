@@ -25,7 +25,7 @@ import toast from 'react-hot-toast';
 interface Props { onClose: () => void; }
 
 export default function SettingsModal({ onClose }: Props) {
-  const { apiKey, setApiKey, anthropicKey, setAnthropicKey, fmpKey, setFmpKey, exchangeRateKey, setExchangeRateKey, fredKey, setFredKey, googleClientId, setGoogleClientId, autoRefresh, setAutoRefresh, baseCurrency, setBaseCurrency, exportData, importData, clearAllData, autonomo, setAutonomo } = useConfigStore();
+  const { apiKey, setApiKey, anthropicKey, setAnthropicKey, fmpKey, setFmpKey, exchangeRateKey, setExchangeRateKey, fredKey, setFredKey, metalsApiKey, setMetalsApiKey, googleClientId, setGoogleClientId, autoRefresh, setAutoRefresh, baseCurrency, setBaseCurrency, exportData, importData, clearAllData, autonomo, setAutonomo } = useConfigStore();
   const { exchangeRates } = useMercadoStore();
   const { connected, lastSync, backupHistory, setConnected, setSyncStatus, setLastSync, setBackupHistory, setSyncError, setLastBackupHash } = useDriveStore();
   const { ingresos, gastos, cuentas } = useFinanzasStore();
@@ -42,6 +42,7 @@ export default function SettingsModal({ onClose }: Props) {
   const [tmpFmpKey, setTmpFmpKey] = useState(fmpKey);
   const [tmpExchangeKey, setTmpExchangeKey] = useState(exchangeRateKey);
   const [tmpFredKey, setTmpFredKey] = useState(fredKey);
+  const [tmpMetalsKey, setTmpMetalsKey] = useState(metalsApiKey);
   const [tmpGoogleClientId, setTmpGoogleClientId] = useState(googleClientId);
   const [settingsTab, setSettingsTab] = useState<'general' | 'apis' | 'autonomo' | 'drive'>('general');
   const [driveConnecting, setDriveConnecting] = useState(false);
@@ -335,6 +336,31 @@ export default function SettingsModal({ onClose }: Props) {
 
             <div style={{ height: 1, background: 'var(--border)' }} />
 
+            {/* Metals API */}
+            <div>
+              <label className="label" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <Key size={12} /> Metals-API (metales preciosos)
+              </label>
+              <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 8 }}>
+                Plan gratuito: 50 req/mes. Obtén tu clave en <span style={{ color: 'var(--blue)' }}>metals-api.com</span>.
+                Sin clave, los precios se obtienen via Yahoo Finance (futuros).
+              </div>
+              <input className="input" type="password" value={tmpMetalsKey} onChange={e => setTmpMetalsKey(e.target.value)} placeholder="API key Metals-API..." />
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button className="btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => { setMetalsApiKey(tmpMetalsKey); toast.success('API Key Metals guardada'); }}>
+                  <Check size={14} /> Guardar
+                </button>
+                {metalsApiKey && (
+                  <button className="btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => { setMetalsApiKey(''); setTmpMetalsKey(''); toast.success('Clave eliminada'); }}>
+                    <X size={14} /> Eliminar
+                  </button>
+                )}
+              </div>
+              {metalsApiKey && <div style={{ marginTop: 6, fontSize: 12, color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 4 }}><Check size={12} /> Clave configurada · Precios directos de metals-api.com</div>}
+            </div>
+
+            <div style={{ height: 1, background: 'var(--border)' }} />
+
             {/* Estado de fuentes */}
             <div>
               <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Estado de fuentes de datos</div>
@@ -344,6 +370,7 @@ export default function SettingsModal({ onClose }: Props) {
                   { name: 'Financial Modeling Prep', desc: 'Fundamentales y análisis', active: !!fmpKey, key: fmpKey },
                   { name: 'ExchangeRate API', desc: 'Tipos de cambio', active: !!exchangeRateKey, key: exchangeRateKey },
                   { name: 'FRED (St. Louis Fed)', desc: 'Indicadores macroeconómicos', active: !!fredKey, key: fredKey },
+                  { name: 'Metals-API', desc: 'Metales preciosos spot', active: !!metalsApiKey, key: metalsApiKey || 'Yahoo Finance (fallback)' },
                   { name: 'CoinGecko', desc: 'Precios crypto (sin clave)', active: true, key: 'free' },
                   { name: 'OpenInsider', desc: 'Insider trading (sin clave)', active: true, key: 'free' },
                   { name: 'Yahoo Finance', desc: 'Histórico e índices (sin clave)', active: true, key: 'free' },

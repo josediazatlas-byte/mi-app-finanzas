@@ -20,6 +20,7 @@ interface ConfigStore {
   fmpKey: string;
   exchangeRateKey: string;
   fredKey: string;
+  metalsApiKey: string;
   googleClientId: string;
   autoRefresh: boolean;
   baseCurrency: 'EUR' | 'USD' | 'GBP';
@@ -30,6 +31,7 @@ interface ConfigStore {
   setFmpKey: (key: string) => void;
   setExchangeRateKey: (key: string) => void;
   setFredKey: (key: string) => void;
+  setMetalsApiKey: (key: string) => void;
   setGoogleClientId: (id: string) => void;
   setAutoRefresh: (v: boolean) => void;
   setBaseCurrency: (c: 'EUR' | 'USD' | 'GBP') => void;
@@ -48,6 +50,7 @@ export const useConfigStore = create<ConfigStore>()(
       fmpKey: '',
       exchangeRateKey: '',
       fredKey: '',
+      metalsApiKey: '',
       googleClientId: '',
       autoRefresh: true,
       baseCurrency: 'EUR',
@@ -58,6 +61,7 @@ export const useConfigStore = create<ConfigStore>()(
       setFmpKey: (fmpKey) => { set({ fmpKey }); localStorage.setItem('fmp_api_key', fmpKey); },
       setExchangeRateKey: (exchangeRateKey) => { set({ exchangeRateKey }); localStorage.setItem('exchange_rate_api_key', exchangeRateKey); },
       setFredKey: (fredKey) => { set({ fredKey }); localStorage.setItem('fred_api_key', fredKey); },
+      setMetalsApiKey: (metalsApiKey) => { set({ metalsApiKey }); localStorage.setItem('metals_api_key', metalsApiKey); },
       setGoogleClientId: (googleClientId) => set({ googleClientId }),
       setAutoRefresh: (autoRefresh) => set({ autoRefresh }),
       setBaseCurrency: (baseCurrency) => set({ baseCurrency }),
