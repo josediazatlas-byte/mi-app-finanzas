@@ -14,7 +14,8 @@ export default function MigracionModal({ userId, onClose }: Props) {
   const handleMigrar = async () => {
     setLoading(true)
     await saveAllData(userId)
-    localStorage.setItem('supabase-migrated', userId)
+    // Store migration flag without exposing the raw UID as a value
+    localStorage.setItem(`app-migrated-${userId.slice(-8)}`, 'done')
     setDone(true)
     setLoading(false)
     setTimeout(onClose, 1500)

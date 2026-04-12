@@ -27,8 +27,8 @@ export default function App() {
       return;
     }
 
-    // Already migrated for this user?
-    const migrated = localStorage.getItem('supabase-migrated') === user.id;
+    // Already migrated for this user? (key uses last 8 chars of UID, value is 'done')
+    const migrated = localStorage.getItem(`app-migrated-${user.id.slice(-8)}`) === 'done';
 
     loadUserData(user.id).then((hasCloudData) => {
       setAppReady(true);

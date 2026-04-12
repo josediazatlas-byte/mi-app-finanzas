@@ -79,6 +79,14 @@ export function useAuth() {
   const signOut = async () => {
     localStorage.removeItem(LAST_ACTIVITY_KEY)
     await supabase.auth.signOut()
+    // Force full page reload to clear all in-memory store state
+    // and guarantee the user lands on the login screen
+    window.location.replace(window.location.origin)
+  }
+
+  const resendConfirmation = async (email: string) => {
+    const { error } = await supabase.auth.resend({ type: 'signup', email })
+    return { error }
   }
 
   const resetPassword = async (email: string) => {
@@ -88,5 +96,5 @@ export function useAuth() {
     return { error }
   }
 
-  return { user, loading, signIn, signUp, signOut, resetPassword }
+  return { user, loading, signIn, signUp, signOut, resetPassword, resendConfirmation }
 }

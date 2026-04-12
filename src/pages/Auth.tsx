@@ -65,7 +65,7 @@ function isRateLimited(): { limited: boolean; minutesLeft?: number } {
 }
 
 export default function Auth() {
-  const { signIn, signUp, resetPassword } = useAuth()
+  const { signIn, signUp, resetPassword, resendConfirmation } = useAuth()
   const [tab, setTab] = useState<Tab>('login')
   const [showPwd, setShowPwd] = useState(false)
   const [showPwd2, setShowPwd2] = useState(false)
@@ -74,6 +74,9 @@ export default function Auth() {
   const [success, setSuccess] = useState('')
   const [showReset, setShowReset] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
+  const [emailNotConfirmed, setEmailNotConfirmed] = useState(false)
+  const [resendLoading, setResendLoading] = useState(false)
+  const [resendDone, setResendDone] = useState(false)
 
   // Login
   const [loginEmail, setLoginEmail] = useState('')
@@ -92,6 +95,8 @@ export default function Auth() {
     setError('')
     setSuccess('')
     setFieldErrors({})
+    setEmailNotConfirmed(false)
+    setResendDone(false)
   }
 
   function validateRegister(): boolean {
@@ -145,8 +150,9 @@ export default function Auth() {
         } else {
           setError(`Email o contraseña incorrectos.${remaining > 0 ? ` Te quedan ${remaining} intento${remaining !== 1 ? 's' : ''}.` : ''}`)
         }
-      } else if (err.message.includes('Email not confirmed')) {
-        setError('Confirma tu email antes de iniciar sesión. Revisa tu bandeja de entrada.')
+      } else if (err.message.includes('Email not confirmed') || err.message.includes('email not confirmed')) {
+        setEmailNotConfirmed(true)
+        setError('Tu email aún no está confirmado. Revisa tu bandeja de entrada (y la carpeta de spam).')
       } else {
         setError('Error al iniciar sesión. Inténtalo de nuevo.')
       }
@@ -351,7 +357,37 @@ export default function Auth() {
                       </button>
                     </div>
                   </div>
-                  {error && <div style={{ color: 'var(--red)', fontSize: 13, marginBottom: 14, padding: '8px 12px', background: 'rgba(239,68,68,0.1)', borderRadius: 8 }}>{error}</div>}
+                  {error && (
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ color: 'var(--red)', fontSize: 13, padding: '8px 12px', background: 'rgba(239,68,68,0.1)', borderRadius: 8, lineHeight: 1.5 }}>
+                        {error}
+                      </div>
+                      {emailNotConfirmed && (
+                        <div style={{ marginTop: 8 }}>
+                          {resendDone ? (
+                            <div style={{ fontSize: 12, color: 'var(--green)', padding: '6px 12px', background: 'rgba(34,197,94,0.1)', borderRadius: 8 }}>
+                              ✓ Email de confirmación reenviado. Revisa tu bandeja.
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={resendLoading}
+                              onClick={async () => {
+                                setResendLoading(true);
+                                await resendConfirmation(loginEmail);
+                                setResendLoading(false);
+                                setResendDone(true);
+                              }}
+                              style={{ fontSize: 12, color: 'var(--blue)', background: 'none', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 6, padding: '6px 12px', cursor: resendLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: resendLoading ? 0.6 : 1 }}
+                            >
+                              {resendLoading && <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} />}
+                              Reenviar email de confirmación
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <button type="submit" style={btnPrimary} disabled={loading}>
                     {loading ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : null}
                     {loading ? 'Entrando...' : 'Entrar'}
@@ -399,7 +435,15 @@ export default function Auth() {
                       <Lock size={16} style={iconStyle} />
                       <input
                         type={showPwd ? 'text' : 'password'} placeholder="Mínimo 8 caracteres"
-                        value={regPassword} onChange={e => { setRegPassword(e.target.value); setFieldErrors(fe => ({ ...fe, password: undefined })) }}
+                        value={regPassword} onChange={e => {
+                          const v = e.target.value;
+                          setRegPassword(v);
+                          setFieldErrors(fe => ({
+                            ...fe,
+                            password: v && v.length < 8 ? 'La contraseña debe tener al menos 8 caracteres.' : undefined,
+                            confirm: regConfirm && v !== regConfirm ? 'Las contraseñas no coinciden.' : undefined,
+                          }));
+                        }}
                         style={{ ...(fieldErrors.password ? inputErrorStyle : inputStyle), paddingRight: 42 }}
                       />
                       <button
@@ -417,7 +461,14 @@ export default function Auth() {
                       <Lock size={16} style={iconStyle} />
                       <input
                         type={showPwd2 ? 'text' : 'password'} placeholder="Repite la contraseña"
-                        value={regConfirm} onChange={e => { setRegConfirm(e.target.value); setFieldErrors(fe => ({ ...fe, confirm: undefined })) }}
+                        value={regConfirm} onChange={e => {
+                          const v = e.target.value;
+                          setRegConfirm(v);
+                          setFieldErrors(fe => ({
+                            ...fe,
+                            confirm: v && regPassword !== v ? 'Las contraseñas no coinciden.' : undefined,
+                          }));
+                        }}
                         style={{ ...(fieldErrors.confirm ? inputErrorStyle : inputStyle), paddingRight: 42 }}
                       />
                       <button

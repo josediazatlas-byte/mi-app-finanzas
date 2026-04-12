@@ -257,9 +257,14 @@ export default function Layout() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  const [signingOut, setSigningOut] = useState(false);
+
   const handleSignOut = async () => {
     setShowUserMenu(false);
+    setSigningOut(true);
     await signOut();
+    // signOut calls window.location.replace(), so this line is a safety fallback
+    setSigningOut(false);
   };
 
   const handleExportPDF = async () => {
@@ -407,10 +412,14 @@ export default function Layout() {
             <button
               className="btn-icon"
               onClick={handleSignOut}
+              disabled={signingOut}
               title="Cerrar sesión"
-              style={{ color: 'var(--text2)' }}
+              style={{ color: signingOut ? 'var(--text3)' : 'var(--text2)' }}
             >
-              <LogOut size={16} />
+              {signingOut
+                ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                : <LogOut size={16} />
+              }
             </button>
           )}
           {/* User menu */}
@@ -442,15 +451,20 @@ export default function Layout() {
                 </div>
                 <button
                   onClick={handleSignOut}
+                  disabled={signingOut}
                   style={{
                     width: '100%', padding: '12px 16px', background: 'none',
-                    border: 'none', cursor: 'pointer', textAlign: 'left',
+                    border: 'none', cursor: signingOut ? 'not-allowed' : 'pointer', textAlign: 'left',
                     display: 'flex', alignItems: 'center', gap: 10,
                     color: 'var(--red)', fontSize: 14, fontWeight: 500,
+                    opacity: signingOut ? 0.6 : 1,
                   }}
                 >
-                  <LogOut size={15} />
-                  Cerrar sesión
+                  {signingOut
+                    ? <Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} />
+                    : <LogOut size={15} />
+                  }
+                  {signingOut ? 'Cerrando sesión...' : 'Cerrar sesión'}
                 </button>
               </div>
             )}
