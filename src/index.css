@@ -87,6 +87,19 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* iOS scroll momentum & no bounce on body */
+  overscroll-behavior-y: none;
+}
+
+/* ── iOS touch optimizations ── */
+button, a, [role="button"], label, select {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Modal/sheet overlays: contain scroll bounce inside */
+.modal-overlay, .modal {
+  overscroll-behavior: contain;
 }
 
 #root { min-height: 100vh; }

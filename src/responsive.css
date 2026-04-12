@@ -6,17 +6,25 @@
 :root {
   --bottom-nav-h: 0px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top:    env(safe-area-inset-top, 0px);
 }
 @media (max-width: 768px) {
   :root { --bottom-nav-h: 64px; }
 }
 
-/* ── Main content padding for bottom nav ── */
-main { padding-bottom: calc(var(--bottom-nav-h) + 8px) !important; }
+/* ── Main content padding for bottom nav + safe area ── */
+main { padding-bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 8px) !important; }
 
 /* ══════════════════════════════════════════
-   HEADER — Mobile compact
+   HEADER — Dynamic Island safe area
    ══════════════════════════════════════════ */
+
+/* app-header: respects Dynamic Island / notch via safe-area-inset-top */
+.app-header {
+  padding-top: var(--safe-top) !important;
+  height: calc(56px + var(--safe-top)) !important;
+}
+
 @media (max-width: 768px) {
   .header-app-name { display: none; }
   .header-nav      { display: none !important; }
@@ -24,6 +32,20 @@ main { padding-bottom: calc(var(--bottom-nav-h) + 8px) !important; }
   .header-pdf-btn  { display: none; }
   .header-user-menu { display: none; }
   /* keep: logo, bell, privacy, settings, logout, sync dot */
+}
+
+/* ── iPhone 15/16 (390px–430px @3x) ── */
+@media (min-width: 390px) and (max-width: 430px) {
+  :root { --bottom-nav-h: 64px; }
+  .patrimonio-main { font-size: 26px !important; }
+  .metric-card .metric-value { font-size: 17px !important; }
+}
+
+/* ── iPhone 15 Plus / 16 Plus (430px–440px @3x) ── */
+@media (min-width: 430px) and (max-width: 440px) {
+  :root { --bottom-nav-h: 68px; }
+  .patrimonio-main { font-size: 28px !important; }
+  .metric-card .metric-value { font-size: 18px !important; }
 }
 
 /* ══════════════════════════════════════════

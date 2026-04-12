@@ -1,9 +1,52 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
+
+    <!-- ── Viewport: viewport-fit=cover is REQUIRED for safe-area-inset-* to work ── -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- ── PWA / iOS meta ── -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="In-Control" />
+    <meta name="apple-touch-fullscreen" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- ── Theme color (dark for iOS status bar) ── -->
+    <meta name="theme-color" content="#09090b" />
+    <meta name="msapplication-TileColor" content="#09090b" />
+
+    <!-- ── Icons ── -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="mask-icon" href="/favicon.svg" color="#3b82f6" />
+
+    <!-- ── iOS Splash screens (apple-touch-startup-image) ──
+         Requires viewport-fit=cover to display correctly in standalone mode.
+         iOS will pick the closest matching media query. -->
+    <!-- iPhone 15 Pro Max / 16 Pro Max  (430pt × 932pt @3x = 1290×2796) -->
+    <link rel="apple-touch-startup-image"
+          href="/splash/splash-1290x2796.png"
+          media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)" />
+    <!-- iPhone 15 Pro / 16 Pro  (393pt × 852pt @3x = 1179×2556) -->
+    <link rel="apple-touch-startup-image"
+          href="/splash/splash-1179x2556.png"
+          media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)" />
+    <!-- iPhone 15 / 16  (390pt × 844pt @3x = 1170×2532) -->
+    <link rel="apple-touch-startup-image"
+          href="/splash/splash-1170x2532.png"
+          media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)" />
+    <!-- iPhone 15 Plus / 16 Plus  (428pt × 926pt @3x = 1284×2778) -->
+    <link rel="apple-touch-startup-image"
+          href="/splash/splash-1284x2778.png"
+          media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)" />
+    <!-- iPhone 14 / 13 / 12  (390pt × 844pt @3x) — same as iPhone 15 -->
+    <!-- Older iPhones (375pt × 667pt @2x = 750×1334) -->
+    <link rel="apple-touch-startup-image"
+          href="/splash/splash-750x1334.png"
+          media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)" />
+
     <title>In-Control</title>
   </head>
   <body>
