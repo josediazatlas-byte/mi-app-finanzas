@@ -1,5 +1,5 @@
 const ALLOWED_ORIGINS = [
-  'https://incontrol-finance.vercel.app',
+  'https://myincontrol.vercel.app',
   'http://localhost:5173',
   'http://localhost:4173',
 ];
