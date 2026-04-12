@@ -282,10 +282,10 @@ export default function Layout() {
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
-      <header style={{ background: 'var(--bg2)', borderBottom: '1px solid var(--border)', padding: '0 24px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100 }}>
+      <header style={{ background: 'var(--bg2)', borderBottom: '1px solid var(--border)', padding: '0 24px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 'var(--z-sticky)' as React.CSSProperties['zIndex'], backdropFilter: 'blur(8px)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 32, height: 32, background: 'var(--blue)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14 }}>MF</div>
-          <span className="header-app-name" style={{ fontWeight: 700, fontSize: 16 }}>Mi App Financiera</span>
+          <div style={{ width: 32, height: 32, background: 'linear-gradient(135deg, var(--blue), var(--blue2))', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, letterSpacing: '0.02em', boxShadow: '0 0 10px rgba(59,130,246,0.35)' }}>MF</div>
+          <span className="header-app-name" style={{ fontWeight: 700, fontSize: 15, letterSpacing: '-0.01em' }}>Mi App Financiera</span>
         </div>
 
         <nav className="header-nav" style={{ display: 'flex', gap: 4 }}>
@@ -297,9 +297,11 @@ export default function Layout() {
               style={({ isActive }) => ({
                 display: 'flex', alignItems: 'center', gap: 6,
                 padding: '6px 12px', borderRadius: 8, textDecoration: 'none',
-                fontSize: 13, fontWeight: 500, transition: 'all 0.2s',
+                fontSize: 13, fontWeight: 500,
+                transition: 'background-color 150ms ease, color 150ms ease',
                 background: isActive ? 'var(--blue)' : 'transparent',
                 color: isActive ? 'white' : 'var(--text2)',
+                outline: 'none',
               })}
             >
               <Icon size={15} />
@@ -340,7 +342,7 @@ export default function Layout() {
                     <div style={{ padding: 24, textAlign: 'center', color: 'var(--text2)', fontSize: 13 }}>✅ Sin alertas activas</div>
                   ) : alertas.map(a => (
                     <div key={a.id} onClick={() => marcarLeida(a.id)} style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', cursor: 'pointer', background: a.leida ? 'transparent' : 'rgba(59,130,246,0.04)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                      <span style={{ fontSize: 16, flexShrink: 0 }}>{a.tipo === 'danger' ? '🔴' : a.tipo === 'warning' ? '🟡' : '🔵'}</span>
+                      <span className={`alert-dot ${a.tipo}`} style={{ marginTop: 3 }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: a.leida ? 400 : 700, marginBottom: 2 }}>{a.titulo}</div>
                         <div style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 1.4 }}>{a.mensaje}</div>

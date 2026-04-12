@@ -218,10 +218,14 @@ main { padding-bottom: calc(var(--bottom-nav-h) + 8px) !important; }
     grid-template-columns: 1fr 1fr !important;
   }
   .hero-grid-3 {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: 1fr 1fr !important;
   }
   .quick-actions-grid {
     grid-template-columns: 1fr 1fr !important;
+  }
+  /* Metric cards — smaller on mobile */
+  .metric-card .metric-value {
+    font-size: 18px !important;
   }
 }
 

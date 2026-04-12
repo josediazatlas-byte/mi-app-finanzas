@@ -1227,8 +1227,6 @@ Responde SOLO con los 4 insights, uno por línea, sin numeración ni texto adici
   const gastosTotal = allGasMes.reduce((s, g) => s + g.importe, 0);
   const ahorro = ingresosTotal - gastosTotal;
 
-  const cardClickStyle: React.CSSProperties = { cursor: 'pointer', userSelect: 'none' };
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
@@ -1302,7 +1300,7 @@ Responde SOLO con los 4 insights, uno por línea, sin numeración ni texto adici
       )}
 
       {/* ——— Accesos rápidos ——— */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div className="quick-actions-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         {[
           { label: 'Añadir ingreso', sub: 'Registrar cobro o entrada', icon: Plus, color: '#3b82f6', bg: 'rgba(59,130,246,0.1)', border: 'rgba(59,130,246,0.28)', onClick: () => setShowModalIngreso(true) },
           { label: 'Añadir inversión', sub: 'Nueva posición en cartera', icon: TrendingUp, color: '#22c55e', bg: 'rgba(34,197,94,0.1)', border: 'rgba(34,197,94,0.28)', onClick: () => setShowModalPosicion(true) },
@@ -1317,8 +1315,10 @@ Responde SOLO con los 4 insights, uno por línea, sin numeración ni texto adici
               borderRadius: 14, padding: '18px 20px',
               textAlign: 'left', cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: 14,
-              transition: 'all 0.15s',
+              transition: 'transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease',
             }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 20px rgba(0,0,0,0.35)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = ''; (e.currentTarget as HTMLElement).style.boxShadow = ''; }}
           >
             <div style={{ background: a.color, borderRadius: 10, width: 42, height: 42, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: `0 4px 12px ${a.color}50` }}>
               <a.icon size={18} color="white" />
@@ -1351,7 +1351,7 @@ Responde SOLO con los 4 insights, uno por línea, sin numeración ni texto adici
         </div>
 
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 14, flexWrap: 'wrap' }}>
-          <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-0.5px' }}>{fmt(patrimonioNeto)}</div>
+          <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-0.5px', fontVariantNumeric: 'tabular-nums' }}>{fmt(patrimonioNeto)}</div>
           {!privacyMode && variacionDia !== 0 && (
             <span style={{ color: variacionDia >= 0 ? 'var(--green)' : 'var(--red)', fontSize: 13, fontWeight: 600 }}>
               {variacionDia >= 0 ? '+' : ''}{fmtEur(variacionDia)} hoy
@@ -1366,9 +1366,9 @@ Responde SOLO con los 4 insights, uno por línea, sin numeración ni texto adici
             { label: 'Inmobiliario', val: equityInmuebles, sub: privacyMode ? '—' : `${patrimonioNeto > 0 ? ((equityInmuebles / patrimonioNeto) * 100).toFixed(1) : 0}%`, subColor: 'var(--text2)' },
             { label: 'Deudas', val: -totalPasivos, sub: `${posiciones.length} activos`, subColor: 'var(--text2)' },
           ].map(m => (
-            <div key={m.label} style={{ background: 'rgba(255,255,255,0.02)', borderRadius: 10, padding: '10px 12px' }}>
-              <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 4 }}>{m.label}</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: m.val < 0 ? 'var(--red)' : 'var(--text)' }}>{m.val < 0 ? '-' : ''}{fmt(Math.abs(m.val))}</div>
+            <div key={m.label} style={{ background: 'rgba(255,255,255,0.025)', borderRadius: 10, padding: '10px 12px', border: '1px solid rgba(255,255,255,0.04)' }}>
+              <div className="metric-label">{m.label}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: m.val < 0 ? 'var(--red)' : 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{m.val < 0 ? '-' : ''}{fmt(Math.abs(m.val))}</div>
               <div style={{ fontSize: 11, color: m.subColor, marginTop: 2 }}>{m.sub}</div>
             </div>
           ))}
@@ -1402,72 +1402,63 @@ Responde SOLO con los 4 insights, uno por línea, sin numeración ni texto adici
 
       {/* Month summary — CLICKABLE */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
-        <div className="card card-hover" style={cardClickStyle} onClick={() => setPanel('ingresos')}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-            <div style={{ fontSize: 12, color: 'var(--text2)' }}>Ingresos del mes</div>
+        <div className="metric-card positive" tabIndex={0} role="button" aria-label="Ver detalle de ingresos" onClick={() => setPanel('ingresos')} onKeyDown={e => e.key === 'Enter' && setPanel('ingresos')}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+            <div className="metric-label">Ingresos del mes</div>
             <ChevronRight size={14} color="var(--text2)" />
           </div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--green)' }}>{fmt(ingresosTotal)}</div>
-          <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 4 }}>{allIngMes.length} entradas · ver detalle</div>
+          <div className="metric-value" style={{ color: 'var(--green)' }}>{fmt(ingresosTotal)}</div>
+          <div className="metric-change" style={{ color: 'var(--text2)' }}>{allIngMes.length} entradas · ver detalle</div>
         </div>
-        <div className="card card-hover" style={cardClickStyle} onClick={() => setPanel('gastos')}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-            <div style={{ fontSize: 12, color: 'var(--text2)' }}>Gastos del mes</div>
+        <div className="metric-card negative" tabIndex={0} role="button" aria-label="Ver detalle de gastos" onClick={() => setPanel('gastos')} onKeyDown={e => e.key === 'Enter' && setPanel('gastos')}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+            <div className="metric-label">Gastos del mes</div>
             <ChevronRight size={14} color="var(--text2)" />
           </div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--red)' }}>{fmt(gastosTotal)}</div>
-          <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 4 }}>{allGasMes.length} entradas · ver detalle</div>
+          <div className="metric-value" style={{ color: 'var(--red)' }}>{fmt(gastosTotal)}</div>
+          <div className="metric-change" style={{ color: 'var(--text2)' }}>{allGasMes.length} entradas · ver detalle</div>
         </div>
-        <div className="card card-hover" style={cardClickStyle} onClick={() => setPanel('ahorro')}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-            <div style={{ fontSize: 12, color: 'var(--text2)' }}>Ahorro del mes</div>
+        <div className={`metric-card ${ahorro >= 0 ? 'positive' : 'negative'}`} tabIndex={0} role="button" aria-label="Ver análisis de ahorro" onClick={() => setPanel('ahorro')} onKeyDown={e => e.key === 'Enter' && setPanel('ahorro')}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+            <div className="metric-label">Ahorro del mes</div>
             <ChevronRight size={14} color="var(--text2)" />
           </div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: ahorro >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmt(ahorro)}</div>
-          <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 4 }}>
-            {!privacyMode && ingresosTotal > 0 ? `${Number((ahorro / ingresosTotal) * 100).toFixed(1)}% tasa ahorro · ` : ''}ver análisis
+          <div className="metric-value" style={{ color: ahorro >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmt(ahorro)}</div>
+          <div className="metric-change" style={{ color: 'var(--text2)' }}>
+            {!privacyMode && ingresosTotal > 0 ? `${Number((ahorro / ingresosTotal) * 100).toFixed(1)}% tasa · ` : ''}ver análisis
           </div>
         </div>
       </div>
 
       {/* Cards finanzas, inversiones e inmobiliario */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
-        <div className="card card-hover" style={{ cursor: 'pointer' }} onClick={() => navigate('/inversiones')}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-            <div>
-              <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 4 }}>Inversiones</div>
-              <div style={{ fontSize: 24, fontWeight: 700 }}>{fmt(valorInversiones)}</div>
-            </div>
-            <ChevronRight size={18} color="var(--text2)" />
+        <div className="metric-card" tabIndex={0} role="button" aria-label="Ver inversiones" onClick={() => navigate('/inversiones')} onKeyDown={e => e.key === 'Enter' && navigate('/inversiones')}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+            <div className="metric-label">Inversiones</div>
+            <ChevronRight size={14} color="var(--text2)" />
           </div>
-          <div style={{ fontSize: 13, color: 'var(--text2)' }}>{posiciones.length} posiciones activas</div>
+          <div className="metric-value">{fmt(valorInversiones)}</div>
+          <div className="metric-change" style={{ color: 'var(--text2)' }}>{posiciones.length} posiciones activas</div>
         </div>
-        <div className="card card-hover" style={{ cursor: 'pointer' }} onClick={() => navigate('/finanzas')}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-            <div>
-              <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 4 }}>Finanzas</div>
-              <div style={{ fontSize: 24, fontWeight: 700 }}>{fmt(saldoCuentas)}</div>
-            </div>
-            <ChevronRight size={18} color="var(--text2)" />
+        <div className="metric-card" tabIndex={0} role="button" aria-label="Ver finanzas" onClick={() => navigate('/finanzas')} onKeyDown={e => e.key === 'Enter' && navigate('/finanzas')}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+            <div className="metric-label">Liquidez</div>
+            <ChevronRight size={14} color="var(--text2)" />
           </div>
-          <div style={{ fontSize: 13, color: 'var(--text2)' }}>{cuentas.length} cuentas bancarias</div>
+          <div className="metric-value">{fmt(saldoCuentas)}</div>
+          <div className="metric-change" style={{ color: 'var(--text2)' }}>{cuentas.length} cuentas bancarias</div>
         </div>
-        <div className="card card-hover" style={{ cursor: 'pointer' }} onClick={() => navigate('/finanzas')}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-            <div>
-              <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 4 }}>🏠 Inmobiliario</div>
-              <div style={{ fontSize: 24, fontWeight: 700 }}>{fmt(equityInmuebles)}</div>
-            </div>
-            <ChevronRight size={18} color="var(--text2)" />
+        <div className="metric-card gold" tabIndex={0} role="button" aria-label="Ver inmobiliario" onClick={() => navigate('/finanzas')} onKeyDown={e => e.key === 'Enter' && navigate('/finanzas')}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+            <div className="metric-label">Inmobiliario</div>
+            <ChevronRight size={14} color="var(--text2)" />
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>{inmuebles.length} inmuebles · valor {fmt(valorInmueblesTotal)}</div>
-          {hipotecasInmuebles > 0 && (
-            <div style={{ fontSize: 11, color: 'var(--red)' }}>Hipotecas: -{fmt(hipotecasInmuebles)}</div>
-          )}
-          {(() => {
-            const rentaMes = inmuebles.filter(i => i.generaRenta).reduce((s, i) => s + i.rentaMensualBruta, 0);
-            return rentaMes > 0 ? <div style={{ fontSize: 11, color: 'var(--green)' }}>Renta bruta: {fmt(rentaMes)}/mes</div> : null;
-          })()}
+          <div className="metric-value">{fmt(equityInmuebles)}</div>
+          <div className="metric-change" style={{ color: 'var(--text2)', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+            <span>{inmuebles.length} inmuebles · {fmt(valorInmueblesTotal)}</span>
+            {hipotecasInmuebles > 0 && <span style={{ color: 'var(--red)' }}>Hipotecas: -{fmt(hipotecasInmuebles)}</span>}
+            {(() => { const r = inmuebles.filter(i => i.generaRenta).reduce((s, i) => s + i.rentaMensualBruta, 0); return r > 0 ? <span style={{ color: 'var(--green)' }}>Renta: {fmt(r)}/mes</span> : null; })()}
+          </div>
         </div>
       </div>
 
