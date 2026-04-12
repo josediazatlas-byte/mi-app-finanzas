@@ -67,7 +67,7 @@ export default function InstallBanner() {
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>
-          Instala Mi App Financiera
+          Instala In-Control
         </div>
         <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.3 }}>
           Acceso rápido desde tu pantalla de inicio

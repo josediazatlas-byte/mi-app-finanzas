@@ -259,7 +259,7 @@ export default function Auth() {
           }}>
             <TrendingUp size={34} color="white" />
           </div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, marginBottom: 6, letterSpacing: '-0.5px' }}>Mi App Financiera</h1>
+          <h1 style={{ fontSize: 26, fontWeight: 800, marginBottom: 6, letterSpacing: '-0.5px' }}>In-Control</h1>
           <p style={{ fontSize: 14, color: 'var(--text2)' }}>Gestiona tu patrimonio de forma inteligente</p>
         </div>
 

@@ -5,7 +5,7 @@ const DRIVE_API   = 'https://www.googleapis.com/drive/v3';
 const UPLOAD_API  = 'https://www.googleapis.com/upload/drive/v3';
 const SHEETS_API  = 'https://sheets.googleapis.com/v4/spreadsheets';
 const SCOPES      = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/spreadsheets';
-const BACKUP_FILENAME = 'mi-app-finanzas-backup.json';
+const BACKUP_FILENAME = 'in-control-backup.json';
 const MAX_BACKUPS = 10;
 
 // ── GIS types ──────────────────────────────────────────────────────────────
@@ -374,7 +374,7 @@ export async function exportToSheets(exportData: SheetsExportData): Promise<stri
   ];
 
   const body = {
-    properties: { title: `Mi App Financiera — Exportación ${today}`, locale: 'es_ES' },
+    properties: { title: `In-Control — Exportación ${today}`, locale: 'es_ES' },
     sheets: sheets.map((s, i) => sheetObject(s, i)),
   };
 

@@ -134,7 +134,7 @@ export function scheduleWeeklyDigest() {
     nextTs: nextSunday.getTime(),
     intervalMs: 7 * 24 * 60 * 60 * 1000, // weekly
     title: 'Resumen semanal',
-    body: 'Revisa tu progreso financiero esta semana en Mi App Financiera.',
+    body: 'Revisa tu progreso financiero esta semana en In-Control.',
   });
 }
 

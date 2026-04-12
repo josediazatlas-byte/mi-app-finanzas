@@ -273,7 +273,7 @@ export default function Layout() {
       const imgW = 210;
       const imgH = (canvas.height * imgW) / canvas.width;
       pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, imgW, imgH);
-      pdf.save(`mi-app-finanzas-${new Date().toISOString().slice(0, 10)}.pdf`);
+      pdf.save(`in-control-${new Date().toISOString().slice(0, 10)}.pdf`);
     } catch {
       alert('Error al generar el PDF. Inténtalo de nuevo.');
     }
@@ -285,7 +285,7 @@ export default function Layout() {
       <header style={{ background: 'var(--bg2)', borderBottom: '1px solid var(--border)', padding: '0 24px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 'var(--z-sticky)' as React.CSSProperties['zIndex'], backdropFilter: 'blur(8px)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ width: 32, height: 32, background: 'linear-gradient(135deg, var(--blue), var(--blue2))', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, letterSpacing: '0.02em', boxShadow: '0 0 10px rgba(59,130,246,0.35)' }}>MF</div>
-          <span className="header-app-name" style={{ fontWeight: 700, fontSize: 15, letterSpacing: '-0.01em' }}>Mi App Financiera</span>
+          <span className="header-app-name" style={{ fontWeight: 700, fontSize: 15, letterSpacing: '-0.01em' }}>In-Control</span>
         </div>
 
         <nav className="header-nav" style={{ display: 'flex', gap: 4 }}>

@@ -83,7 +83,7 @@ export function useAuth() {
 
   const resetPassword = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'https://mi-app-finanzas-seven.vercel.app',
+      redirectTo: 'https://in-control.vercel.app',
     })
     return { error }
   }
