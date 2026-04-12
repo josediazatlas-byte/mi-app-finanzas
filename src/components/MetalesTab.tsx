@@ -292,10 +292,10 @@ function PosicionRow({ pos, precioActual, usdEur, valorTotal, onEdit, onDelete }
 
         {/* PnL */}
         <div style={{ textAlign: 'right', minWidth: 80 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: pnlEur >= 0 ? 'var(--green)' : 'var(--red)', fontVariantNumeric: 'tabular-nums' }}>
+          <div className={`pnl-value ${pnlEur >= 0 ? 'positive' : 'negative'}`} style={{ fontSize: 13 }}>
             {pnlEur >= 0 ? '+' : ''}{fmtEur(pnlEur)}
           </div>
-          <div style={{ fontSize: 11, color: pnlPct >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: 600 }}>
+          <div className={`pnl-value ${pnlPct >= 0 ? 'positive' : 'negative'}`} style={{ fontSize: 11 }}>
             {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%
           </div>
         </div>

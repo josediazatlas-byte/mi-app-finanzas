@@ -871,13 +871,13 @@ Pasos específicos que debería tomar esta semana/mes.`;
               </div>
               <div>
                 <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>P&L</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: pnlEur >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                <div className={`pnl-value ${pnlEur >= 0 ? 'positive' : 'negative'}`} style={{ fontSize: 20 }}>
                   {pnlEur >= 0 ? '+' : ''}{fmtEur(pnlEur)}
                 </div>
               </div>
               <div>
                 <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>P&L %</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: pnlPct >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                <div className={`pnl-value ${(pnlPct ?? 0) >= 0 ? 'positive' : 'negative'}`} style={{ fontSize: 20 }}>
                   {(pnlPct ?? 0) >= 0 ? '+' : ''}{Number(pnlPct ?? 0).toFixed(2)}%
                 </div>
               </div>

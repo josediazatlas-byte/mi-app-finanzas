@@ -1,11 +1,11 @@
 /* ═══════════════════════════════════════════════════════════
-   DESIGN SYSTEM — Mi App Finanzas
+   DESIGN SYSTEM — In-Control
    Stack: React + Tailwind | Mode: Dark OLED Premium
-   Typography: IBM Plex Sans (Fintech / Banking)
+   Typography: IBM Plex Sans (body) + Fira Code (data/numbers)
    Palette: Deep Navy + Electric Blue + Fintech Gold
    ═══════════════════════════════════════════════════════════ */
 
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=Fira+Code:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 /* ── Token system ── */
@@ -49,6 +49,7 @@
   --shadow-sm: 0 2px 8px rgba(0,0,0,0.4);
   --shadow-md: 0 4px 16px rgba(0,0,0,0.5);
   --shadow-lg: 0 8px 32px rgba(0,0,0,0.6);
+  --shadow-xl: 0 20px 40px rgba(0,0,0,0.7);
 
   /* Radii */
   --r-sm: 6px;
@@ -61,6 +62,15 @@
   --z-sticky:   200;
   --z-modal:    500;
   --z-toast:    1000;
+
+  /* Spacing tokens */
+  --space-xs:  4px;
+  --space-sm:  8px;
+  --space-md:  16px;
+  --space-lg:  24px;
+  --space-xl:  32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
 }
 
 /* ── Base reset ── */
@@ -180,6 +190,7 @@ body {
   font-size: 24px;
   font-weight: 700;
   letter-spacing: -0.5px;
+  font-family: 'Fira Code', monospace;
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
 }
@@ -536,7 +547,7 @@ body {
 /* ═══════════════════════════════════════════════════════════
    TYPOGRAPHY UTILITIES
    ═══════════════════════════════════════════════════════════ */
-.text-mono { font-family: 'IBM Plex Mono', 'Courier New', monospace; font-variant-numeric: tabular-nums; }
+.text-mono { font-family: 'Fira Code', 'IBM Plex Mono', 'Courier New', monospace; font-variant-numeric: tabular-nums; }
 .text-gradient-blue {
   background: linear-gradient(135deg, var(--blue), #60a5fa);
   -webkit-background-clip: text;
@@ -587,6 +598,91 @@ body {
   opacity: 0.3;
   display: block;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   DASHBOARD — KPI / DATA DISPLAY
+   ═══════════════════════════════════════════════════════════ */
+
+/* Primary KPI number — Fira Code, large, tabular */
+.kpi-value {
+  font-family: 'Fira Code', monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -1px;
+  line-height: 1.1;
+  transition: color 400ms ease;
+}
+
+/* Trend direction indicators */
+.trend-up {
+  color: var(--green);
+  transition: color 300ms ease;
+}
+.trend-down {
+  color: var(--red);
+  transition: color 300ms ease;
+}
+.trend-neutral {
+  color: var(--text2);
+  transition: color 300ms ease;
+}
+
+/* PnL value with smooth color transitions */
+.pnl-value {
+  font-family: 'Fira Code', monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  transition: color 400ms ease;
+}
+.pnl-value.positive { color: var(--green); }
+.pnl-value.negative { color: var(--red); }
+
+/* Subtle fade-in-up for cards/sections */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-in {
+  animation: fade-in-up 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.animate-in-delay-1 { animation-delay: 60ms; }
+.animate-in-delay-2 { animation-delay: 120ms; }
+.animate-in-delay-3 { animation-delay: 180ms; }
+.animate-in-delay-4 { animation-delay: 240ms; }
+
+/* Number shimmer loading state */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--bg3) 25%, var(--bg4) 50%, var(--bg3) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--r-sm);
+  color: transparent;
+}
+
+/* Dashboard section header */
+.dash-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Glowing positive metric card */
+.metric-card.positive:hover { box-shadow: var(--glow-green); }
+.metric-card.negative:hover { box-shadow: var(--glow-red); }
+.metric-card.gold:hover     { box-shadow: var(--glow-gold); }
 
 /* ═══════════════════════════════════════════════════════════
    MOBILE BOTTOM PADDING (overridden in responsive.css)

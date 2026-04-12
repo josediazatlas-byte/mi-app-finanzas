@@ -1381,7 +1381,7 @@ Responde SOLO con los 4 insights, uno por línea, sin numeración ni texto adici
       </div>
 
       {/* ——— Patrimonio Neto ——— */}
-      <div className="card card-hover" style={{ background: 'linear-gradient(135deg, #1e1e2e 0%, #161618 100%)', border: '1px solid #2a2a42', cursor: 'pointer' }} onClick={() => setShowPatrimonio(true)}>
+      <div className="card card-hover animate-in" style={{ background: 'linear-gradient(135deg, #1e1e2e 0%, #161618 100%)', border: '1px solid #2a2a42', cursor: 'pointer' }} onClick={() => setShowPatrimonio(true)}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ fontSize: 13, color: 'var(--text2)', fontWeight: 500 }}>Patrimonio Neto</div>
@@ -1400,9 +1400,9 @@ Responde SOLO con los 4 insights, uno por línea, sin numeración ni texto adici
         </div>
 
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 14, flexWrap: 'wrap' }}>
-          <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-0.5px', fontVariantNumeric: 'tabular-nums' }}>{fmt(patrimonioNeto)}</div>
+          <div className="kpi-value">{fmt(patrimonioNeto)}</div>
           {!privacyMode && variacionDia !== 0 && (
-            <span style={{ color: variacionDia >= 0 ? 'var(--green)' : 'var(--red)', fontSize: 13, fontWeight: 600 }}>
+            <span className={`pnl-value ${variacionDia >= 0 ? 'positive' : 'negative'}`} style={{ fontSize: 13 }}>
               {variacionDia >= 0 ? '+' : ''}{fmtEur(variacionDia)} hoy
             </span>
           )}
@@ -1417,7 +1417,7 @@ Responde SOLO con los 4 insights, uno por línea, sin numeración ni texto adici
           ].map(m => (
             <div key={m.label} style={{ background: 'rgba(255,255,255,0.025)', borderRadius: 10, padding: '10px 12px', border: '1px solid rgba(255,255,255,0.04)' }}>
               <div className="metric-label">{m.label}</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: m.val < 0 ? 'var(--red)' : 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{m.val < 0 ? '-' : ''}{fmt(Math.abs(m.val))}</div>
+              <div className={`pnl-value ${m.val < 0 ? 'negative' : ''}`} style={{ fontSize: 13, fontWeight: 700, color: m.val < 0 ? undefined : 'var(--text)' }}>{m.val < 0 ? '-' : ''}{fmt(Math.abs(m.val))}</div>
               <div style={{ fontSize: 11, color: m.subColor, marginTop: 2 }}>{m.sub}</div>
             </div>
           ))}
@@ -1451,7 +1451,7 @@ Responde SOLO con los 4 insights, uno por línea, sin numeración ni texto adici
 
       {/* Month summary — CLICKABLE */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
-        <div className="metric-card positive" tabIndex={0} role="button" aria-label="Ver detalle de ingresos" onClick={() => setPanel('ingresos')} onKeyDown={e => e.key === 'Enter' && setPanel('ingresos')}>
+        <div className="metric-card positive animate-in animate-in-delay-1" tabIndex={0} role="button" aria-label="Ver detalle de ingresos" onClick={() => setPanel('ingresos')} onKeyDown={e => e.key === 'Enter' && setPanel('ingresos')}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
             <div className="metric-label">Ingresos del mes</div>
             <ChevronRight size={14} color="var(--text2)" />
@@ -1459,7 +1459,7 @@ Responde SOLO con los 4 insights, uno por línea, sin numeración ni texto adici
           <div className="metric-value" style={{ color: 'var(--green)' }}>{fmt(ingresosTotal)}</div>
           <div className="metric-change" style={{ color: 'var(--text2)' }}>{allIngMes.length} entradas · ver detalle</div>
         </div>
-        <div className="metric-card negative" tabIndex={0} role="button" aria-label="Ver detalle de gastos" onClick={() => setPanel('gastos')} onKeyDown={e => e.key === 'Enter' && setPanel('gastos')}>
+        <div className="metric-card negative animate-in animate-in-delay-2" tabIndex={0} role="button" aria-label="Ver detalle de gastos" onClick={() => setPanel('gastos')} onKeyDown={e => e.key === 'Enter' && setPanel('gastos')}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
             <div className="metric-label">Gastos del mes</div>
             <ChevronRight size={14} color="var(--text2)" />
@@ -1467,7 +1467,7 @@ Responde SOLO con los 4 insights, uno por línea, sin numeración ni texto adici
           <div className="metric-value" style={{ color: 'var(--red)' }}>{fmt(gastosTotal)}</div>
           <div className="metric-change" style={{ color: 'var(--text2)' }}>{allGasMes.length} entradas · ver detalle</div>
         </div>
-        <div className={`metric-card ${ahorro >= 0 ? 'positive' : 'negative'}`} tabIndex={0} role="button" aria-label="Ver análisis de ahorro" onClick={() => setPanel('ahorro')} onKeyDown={e => e.key === 'Enter' && setPanel('ahorro')}>
+        <div className={`metric-card ${ahorro >= 0 ? 'positive' : 'negative'} animate-in animate-in-delay-3`} tabIndex={0} role="button" aria-label="Ver análisis de ahorro" onClick={() => setPanel('ahorro')} onKeyDown={e => e.key === 'Enter' && setPanel('ahorro')}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
             <div className="metric-label">Ahorro del mes</div>
             <ChevronRight size={14} color="var(--text2)" />
@@ -1481,7 +1481,7 @@ Responde SOLO con los 4 insights, uno por línea, sin numeración ni texto adici
 
       {/* Cards finanzas, inversiones e inmobiliario */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
-        <div className="metric-card" tabIndex={0} role="button" aria-label="Ver inversiones" onClick={() => navigate('/inversiones')} onKeyDown={e => e.key === 'Enter' && navigate('/inversiones')}>
+        <div className="metric-card animate-in animate-in-delay-1" tabIndex={0} role="button" aria-label="Ver inversiones" onClick={() => navigate('/inversiones')} onKeyDown={e => e.key === 'Enter' && navigate('/inversiones')}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
             <div className="metric-label">Inversiones</div>
             <ChevronRight size={14} color="var(--text2)" />
@@ -1489,7 +1489,7 @@ Responde SOLO con los 4 insights, uno por línea, sin numeración ni texto adici
           <div className="metric-value">{fmt(valorInversiones)}</div>
           <div className="metric-change" style={{ color: 'var(--text2)' }}>{posiciones.length} posiciones activas</div>
         </div>
-        <div className="metric-card" tabIndex={0} role="button" aria-label="Ver finanzas" onClick={() => navigate('/finanzas')} onKeyDown={e => e.key === 'Enter' && navigate('/finanzas')}>
+        <div className="metric-card animate-in animate-in-delay-2" tabIndex={0} role="button" aria-label="Ver finanzas" onClick={() => navigate('/finanzas')} onKeyDown={e => e.key === 'Enter' && navigate('/finanzas')}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
             <div className="metric-label">Liquidez</div>
             <ChevronRight size={14} color="var(--text2)" />
@@ -1497,7 +1497,7 @@ Responde SOLO con los 4 insights, uno por línea, sin numeración ni texto adici
           <div className="metric-value">{fmt(saldoCuentas)}</div>
           <div className="metric-change" style={{ color: 'var(--text2)' }}>{cuentas.length} cuentas bancarias</div>
         </div>
-        <div className="metric-card gold" tabIndex={0} role="button" aria-label="Ver inmobiliario" onClick={() => navigate('/finanzas')} onKeyDown={e => e.key === 'Enter' && navigate('/finanzas')}>
+        <div className="metric-card gold animate-in animate-in-delay-3" tabIndex={0} role="button" aria-label="Ver inmobiliario" onClick={() => navigate('/finanzas')} onKeyDown={e => e.key === 'Enter' && navigate('/finanzas')}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
             <div className="metric-label">Inmobiliario</div>
             <ChevronRight size={14} color="var(--text2)" />
